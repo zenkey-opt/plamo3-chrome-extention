@@ -128,6 +128,33 @@ try {
     // evaluate in the extension's offscreen document (target type background_page)
     const t = await findTarget('offscreen/', 'background_page');
     out(await evalIn(t, args[0]));
+  } else if (cmd === 'worker') {
+    // evaluate in the engine's dedicated worker (llama-worker.js): dedicated workers are not listed
+    // targets, so auto-attach to them from the offscreen document and use the flat session
+    const t = await findTarget('offscreen/', 'background_page');
+    const ws = new WebSocket(t.webSocketDebuggerUrl);
+    await new Promise((res, rej) => ((ws.onopen = res), (ws.onerror = () => rej(new Error('ws error')))));
+    let id = 0;
+    const pending = new Map();
+    let session = null;
+    ws.onmessage = (ev) => {
+      const m = JSON.parse(ev.data);
+      if (m.method === 'Target.attachedToTarget' && m.params.targetInfo.type === 'worker') session = session || m.params.sessionId;
+      if (m.id && pending.has(m.id)) pending.get(m.id)(m);
+    };
+    const send = (method, params = {}, sessionId) =>
+      new Promise((res) => {
+        const i = ++id;
+        pending.set(i, res);
+        ws.send(JSON.stringify({ id: i, method, params, ...(sessionId ? { sessionId } : {}) }));
+      });
+    await send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
+    for (let i = 0; i < 50 && !session; i++) await new Promise((r) => setTimeout(r, 100));
+    if (!session) throw new Error('no dedicated worker under the offscreen document');
+    const m = await send('Runtime.evaluate', { expression: args[0], awaitPromise: true, returnByValue: true }, session);
+    ws.close();
+    if (m.error) throw new Error(JSON.stringify(m.error));
+    out(unwrap(m.result));
   } else if (cmd === 'iso') {
     const t = await findTarget(args[0], 'page');
     out(await isoEval(t, args[1]));

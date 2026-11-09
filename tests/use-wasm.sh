@@ -4,7 +4,8 @@
 # usage: bash tests/use-wasm.sh <wllama.wasm>
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cp "$1" "$ROOT/.work/ext-test/vendor/wllama/wllama.wasm"
+DEST="$ROOT/.work/ext-test/vendor/wllama/wllama.wasm"
+[ "$1" -ef "$DEST" ] || cp "$1" "$DEST" # the same file: only reload
 cd "$ROOT/tests"
 node cdp.mjs targets | grep -q 'chrome://extensions' || { node cdp.mjs open "chrome://extensions/" >/dev/null; sleep 1.5; }
 node cdp.mjs page "chrome://extensions" "new Promise(r => chrome.developerPrivate.reload('bhkpaambekhpdikhkccbfdappiogpgnc', {failQuietly: true}, () => chrome.management.setEnabled('bhkpaambekhpdikhkccbfdappiogpgnc', true, () => r('reloaded'))))" >/dev/null
