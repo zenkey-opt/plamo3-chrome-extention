@@ -33,15 +33,34 @@ fetch() { # dir url commit
 }
 fetch wsrc https://github.com/ngxson/wllama.git "$WLLAMA_COMMIT"
 fetch wsrc/llama.cpp https://github.com/ggml-org/llama.cpp.git "$LLAMA_COMMIT"
-# idempotent (re-applying would touch files and force a relink); rm -rf "$WORK/wsrc" for a clean tree
-# tools/wllama-patches/*.patch apply to wllama, tools/wllama-patches/llama.cpp/*.patch to its llama.cpp
+# tools/wllama-patches/*.patch apply to wllama, tools/wllama-patches/llama.cpp/*.patch to its llama.cpp.
+# The patches form a stack, recorded in a stamp file (names + content hashes + touched files). If the
+# stack is unchanged nothing is touched (no needless rebuild); otherwise the files touched by the old and
+# the new stack are restored from git and every patch is applied again in order. (Checking a single
+# patch in reverse is not enough: it fails as soon as a later patch edits its context lines.)
 apply_patches() { # repo-dir patch...
-  local dir=$1 p; shift
-  for p in "$@"; do
-    [ -f "$p" ] || continue
-    if git -C "$dir" apply --ignore-whitespace --reverse --check "$(native "$p")" 2>/dev/null; then echo "already applied $(basename "$p")"
-    else git -C "$dir" apply --ignore-whitespace "$(native "$p")"; echo "applied $(basename "$p")"; fi
+  local dir=$1 stamp=$1/.wllama-patches p sig files f
+  shift
+  local patches=()
+  for p in "$@"; do if [ -f "$p" ]; then patches+=("$p"); fi; done
+  sig=$(for p in "${patches[@]}"; do echo "$(basename "$p") $(sha256sum < "$p" | cut -c1-16)"; done)
+  if [ -f "$stamp" ] && [ "$(sed '/^files:$/,$d' "$stamp")" = "$sig" ]; then
+    echo "patches up to date in $dir (${#patches[@]})"
+    return
+  fi
+  files=$({
+    if [ -f "$stamp" ]; then sed -n '/^files:$/,$p' "$stamp" | tail -n +2; fi
+    for p in "${patches[@]}"; do sed -n 's#^+++ b/##p' "$p"; done
+  } | sort -u)
+  for f in $files; do
+    if git -C "$dir" ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then git -C "$dir" checkout -q -- "$f"
+    else rm -f "$dir/$f"; fi # added by a patch
   done
+  for p in "${patches[@]}"; do
+    git -C "$dir" apply --ignore-whitespace "$(native "$p")"
+    echo "applied $(basename "$p")"
+  done
+  { echo "$sig"; echo "files:"; for p in "${patches[@]}"; do sed -n 's#^+++ b/##p' "$p"; done | sort -u; } > "$stamp"
 }
 apply_patches wsrc "$ROOT"/tools/wllama-patches/*.patch
 apply_patches wsrc/llama.cpp "$ROOT"/tools/wllama-patches/llama.cpp/*.patch

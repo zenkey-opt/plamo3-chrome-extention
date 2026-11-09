@@ -7,7 +7,7 @@
 // (otherwise timestamps are quantized to 100 us).
 // The profile build runs one compute pass per dispatch, so its wall times are not representative;
 // compare GPU busy time per graph with the release build's wall time per graph instead.
-// node gpu_profile.mjs [modelId] [classes, e.g. long or short,medium] [out.json]
+// node gpu_profile.mjs [modelId] [classes, e.g. long, short,medium, page or all] [out.json]
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -20,11 +20,17 @@ const sw = (js) => JSON.parse(cdp('sw', js));
 
 // a fresh load resets the counters (new backend context)
 cdp('sw', "self.__plamo.engineCall('unload').then(() => 'ok')");
-console.log('load ->', cdp('sw', `self.__plamo.engineCall('load', { modelId: '${modelId}' }).then(s => s.state + ' ' + s.info.loadMs + ' ms')`));
+console.log('load ->', cdp('sw', `chrome.storage.local.set({ model: '${modelId}' }).then(() => self.__plamo.engineCall('load', { modelId: '${modelId}' })).then(s => s.state + ' ' + s.info.loadMs + ' ms')`));
 const runs = [];
-for (const cls of classes)
-  for (const text of T[cls])
-    runs.push(sw(`self.__plamo.translate({ text: ${JSON.stringify(text)}, target: 'ja', useCache: false }).then(r => JSON.stringify({ ms: r.ms, stats: r.stats }))`));
+// 'page' / 'all': the page texts / all fixture texts at once (parallel slots: multi-column products);
+// other classes: one text after another
+const together = (texts) =>
+  sw(`Promise.all(${JSON.stringify(texts)}.map(t => self.__plamo.translate({ text: t, target: 'ja', useCache: false, priority: 'low' }))).then(rs => JSON.stringify(rs.map(r => ({ ms: r.ms, stats: r.stats }))))`);
+for (const cls of classes) {
+  if (cls === 'page') runs.push(...together(T.page));
+  else if (cls === 'all') runs.push(...together([...T.page, ...T.short, ...T.medium, ...T.long]));
+  else for (const text of T[cls]) runs.push(sw(`self.__plamo.translate({ text: ${JSON.stringify(text)}, target: 'ja', useCache: false }).then(r => JSON.stringify({ ms: r.ms, stats: r.stats }))`));
+}
 const logs = sw("self.__plamo.engineCall('logs').then(l => JSON.stringify(l))");
 let start = -1;
 logs.forEach((l, i) => {

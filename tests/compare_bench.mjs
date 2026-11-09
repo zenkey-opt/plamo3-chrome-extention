@@ -3,9 +3,11 @@
 import { readFileSync } from 'node:fs';
 
 const [A, B] = process.argv.slice(2).map((p) => JSON.parse(readFileSync(p, 'utf8')));
+// the 33-text run (pageAll) is compared too when both files have it
+const withAll = [A, B].every((r) => r.rounds.every((x) => x.pageAll));
 const texts = (r, i) => {
   const x = r.rounds[i];
-  return [...['short', 'medium', 'long'].flatMap((c) => x.sequential[c].texts), ...x.page.texts];
+  return [...['short', 'medium', 'long'].flatMap((c) => x.sequential[c].texts), ...x.page.texts, ...(withAll ? x.pageAll.texts : [])];
 };
 let same = 0;
 let total = 0;
@@ -23,7 +25,7 @@ const fmt = (r) =>
   r.rounds
     .map((x) => {
       const s = x.sequential;
-      return `short ${s.short.msMedian} ms, medium ${s.medium.msMedian} ms (${s.medium.genTokPerSec} tok/s), long ${s.long.msMedian} ms (${s.long.genTokPerSec} tok/s, prompt ${s.long.promptMsPerTok} ms/tok), page ${x.page.wall} ms`;
+      return `short ${s.short.msMedian} ms, medium ${s.medium.msMedian} ms (${s.medium.genTokPerSec} tok/s), long ${s.long.msMedian} ms (${s.long.genTokPerSec} tok/s, prompt ${s.long.promptMsPerTok} ms/tok), page ${x.page.wall} ms${x.pageAll ? `, all ${x.pageAll.wall} ms` : ''}`;
     })
     .join('\n    ');
 console.log(`A ${A.label}: ${fmt(A)}\nB ${B.label}: ${fmt(B)}`);

@@ -65,7 +65,12 @@ await send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: f
 const info = await attached;
 const ev = async (expression) => (await send('Runtime.evaluate', { expression, returnByValue: true }, info.sessionId)).result.value;
 await ev('self.__TL = []; 1');
-const r = JSON.parse(cdp('sw', `self.__plamo.translate({ text: ${JSON.stringify(T[cls][idx])}, target: 'ja', useCache: false }).then(r => JSON.stringify({ ms: r.ms, stats: r.stats }))`));
+// cls 'page': all page texts at once (parallel slots), otherwise one text
+const job =
+  cls === 'page'
+    ? `(async () => { const t0 = performance.now(); const rs = await Promise.all(${JSON.stringify(T.page)}.map(t => self.__plamo.translate({ text: t, target: 'ja', useCache: false, priority: 'low' }))); return JSON.stringify({ ms: Math.round(performance.now() - t0), stats: { promptN: rs.reduce((a, r) => a + r.stats.promptN, 0), genN: rs.reduce((a, r) => a + r.stats.genN, 0) } }); })()`
+    : `self.__plamo.translate({ text: ${JSON.stringify(T[cls][idx])}, target: 'ja', useCache: false }).then(r => JSON.stringify({ ms: r.ms, stats: r.stats }))`;
+const r = JSON.parse(cdp('sw', job));
 const tl = await ev('JSON.stringify(self.__TL)');
 await ev('self.__TL = null; 1');
 ws.close();

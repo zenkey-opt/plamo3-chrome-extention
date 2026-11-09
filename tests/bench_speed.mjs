@@ -1,7 +1,8 @@
 // Translation speed benchmark in the test Brave (2B model). Every request has a new text, as in real use.
 // node bench_speed.mjs <label> [out.json] [rounds]
 //   sequential: 3 short / 3 medium / 3 long texts one after another (median per class)
-//   page:       24 texts of a web page submitted at once (the page translator runs up to 4 at a time)
+//   page:       24 texts of a web page submitted at once (the page translator runs as many as the engine has slots)
+//   all:        all 33 fixture texts at once
 // Outputs are greedy, so the texts must stay identical between engine builds (compare the JSON files).
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -37,10 +38,15 @@ for (let r = 0; r < rounds; r++) {
   }
   const page = sw(`(async () => { const t0 = performance.now(); const rs = await Promise.all(${JSON.stringify(T.page)}.map(t => self.__plamo.translate({ text: t, target: 'ja', useCache: false, priority: 'low' }))); return JSON.stringify({ wall: Math.round(performance.now() - t0), gen: rs.reduce((a, r) => a + r.stats.genN, 0), prompt: rs.reduce((a, r) => a + r.stats.promptN, 0), texts: rs.map(r => r.text) }); })()`);
   round.page = { ...page, aggTokPerSec: +((page.gen / page.wall) * 1000).toFixed(1) };
+  // all fixture texts at once (33, mixed lengths): saturates 8-16 engine slots too
+  const all = [...T.page, ...T.short, ...T.medium, ...T.long];
+  const pa = sw(`(async () => { const t0 = performance.now(); const rs = await Promise.all(${JSON.stringify(all)}.map(t => self.__plamo.translate({ text: t, target: 'ja', useCache: false, priority: 'low' }))); return JSON.stringify({ wall: Math.round(performance.now() - t0), gen: rs.reduce((a, r) => a + r.stats.genN, 0), prompt: rs.reduce((a, r) => a + r.stats.promptN, 0), texts: rs.map(r => r.text) }); })()`);
+  round.pageAll = { ...pa, aggTokPerSec: +((pa.gen / pa.wall) * 1000).toFixed(1) };
   res.rounds.push(round);
   for (const [cls, v] of Object.entries(round.sequential))
     console.log(`[${r}] ${cls.padEnd(6)} median ${String(v.msMedian).padStart(5)} ms  prompt ${v.promptN} tok @ ${v.promptMsPerTok} ms/tok  gen ${v.genN} tok @ ${v.genTokPerSec} tok/s`);
   console.log(`[${r}] page   24 texts ${page.wall} ms  (${page.prompt} prompt + ${page.gen} generated tokens, ${round.page.aggTokPerSec} tok/s aggregate)`);
+  console.log(`[${r}] all    33 texts ${pa.wall} ms  (${pa.prompt} prompt + ${pa.gen} generated tokens, ${round.pageAll.aggTokPerSec} tok/s aggregate)`);
 }
 writeFileSync(out, JSON.stringify(res, null, 2));
 console.log('saved', out);
