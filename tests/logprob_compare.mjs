@@ -9,13 +9,14 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const [cmd, a, b] = process.argv.slice(2);
+const MODEL = process.env.MODEL || '2b-q4km'; // MODEL=0.8b-q4km for the small model
 const dir = new URL('../.work/bench/', import.meta.url);
 const cdp = (...args) => execFileSync('node', [new URL('./cdp.mjs', import.meta.url).pathname.replace(/^\/(\w:)/, '$1'), ...args], { encoding: 'utf8', maxBuffer: 256 << 20 }).trim();
 
 if (cmd === 'run') {
   const T = JSON.parse(readFileSync(new URL('./fixtures/bench_texts.json', import.meta.url), 'utf8'));
   const texts = [...T.short, ...T.medium, ...T.long, ...T.page].filter((t, i, all) => all.indexOf(t) === i);
-  cdp('sw', "chrome.storage.local.set({ model: '2b-q4km' }).then(() => self.__plamo.engineCall('unload')).then(() => self.__plamo.engineCall('load', { modelId: '2b-q4km' })).then(() => 'ok')");
+  cdp('sw', `chrome.storage.local.set({ model: '${MODEL}' }).then(() => self.__plamo.engineCall('unload')).then(() => self.__plamo.engineCall('load', { modelId: '${MODEL}' })).then(() => 'ok')`);
   cdp('offscreen', 'self.__lp = []; 0');
   for (const [i, t] of texts.entries()) {
     cdp('sw', `self.__plamo.translate({ text: ${JSON.stringify(t)}, target: 'ja', useCache: false }).then(r => r.text.length)`);

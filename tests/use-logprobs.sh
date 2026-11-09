@@ -8,7 +8,7 @@ import sys
 p, mode = sys.argv[1], sys.argv[2]
 s = open(p, encoding='utf-8').read()
 A = "    abortSignal: ctrl.signal,\n  };\n"
-A2 = A + "  params.logprobs = true; params.top_logprobs = 3; const lpc = []; // DEV logprobs\n"
+A2 = A + "  params.logprobs = 3; params.top_logprobs = 3; params.n_probs = 3; const lpc = []; // DEV logprobs\n"
 B = "          if (c?.timings) last = c;\n"
 B2 = B + "          if (c?.choices?.[0]?.logprobs?.content) lpc.push(...c.choices[0].logprobs.content); // DEV logprobs\n"
 C = "    return { text, timings: last?.timings || null,"

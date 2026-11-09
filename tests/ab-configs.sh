@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Dev-only: A/B engine configurations on the test copy. Each argument is
-#   name|<slots>|<ubatch>|<unified|split>|<n_ctx>|<shader-hook json cfg or off>
+#   name|<slots>|<ubatch>|<unified|split>|<n_ctx>|<shader-hook json cfg or off>[|<wasm file in .work/bench>]
 # The list runs twice in order (interleaved, against drift), each run a bench_speed with 2 rounds;
 # results go to .work/bench/cf_<name>_<pass>.json, then every config's texts are compared to the first's.
 set -e
@@ -8,7 +8,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/tests"
 for pass in 1 2; do
   for spec in "$@"; do
-    IFS='|' read -r name slots ub kv nctx hook <<< "$spec"
+    IFS='|' read -r name slots ub kv nctx hook wasm <<< "$spec"
+    if [ -n "$wasm" ]; then cp "$ROOT/.work/bench/$wasm" "$ROOT/.work/ext-test/vendor/wllama/wllama.wasm"; fi
     bash use-slots.sh "$slots" "$ub" >/dev/null
     python - "$(cygpath -m "$ROOT/.work/ext-test/offscreen/engine.js")" "$kv" "$nctx" <<'EOF'
 import re, sys
@@ -22,7 +23,7 @@ assert n == 1
 open(p, 'w', encoding='utf-8', newline='\n').write(s)
 EOF
     bash use-shader-hook.sh "$hook" >/dev/null
-    echo "== $name (pass $pass): slots $slots ubatch $ub kv $kv n_ctx $nctx hook $hook"
+    echo "== $name (pass $pass): slots $slots ubatch $ub kv $kv n_ctx $nctx hook $hook ${wasm:+wasm $wasm}"
     timeout 900 node bench_speed.mjs "cf_$name" "$(cygpath -m "$ROOT/.work/bench/cf_${name}_$pass.json")" 2 2>&1 | grep -E "^\[1\]|Error" || true
   done
 done

@@ -16,7 +16,7 @@ def sub(rel, pattern, repl):
     assert n >= 1, (rel, pattern)
     open(p, 'w', encoding='utf-8', newline='\n').write(s2)
 sub('offscreen/engine.js', r'const N_PARALLEL = \d+;', f'const N_PARALLEL = {par};')
-sub('offscreen/engine.js', r'n_ubatch: \d+,', f'n_ubatch: {ub},')
+sub('offscreen/engine.js', r'n_ubatch: (\d+|N_PARALLEL),', f'n_ubatch: {ub},')
 sub('background.js', r'Math\.min\(\d+, Number\(s\.concurrency\) \|\| \d+\)', f'Math.min({par}, Number(s.concurrency) || {par})')
 sub('background.js', r'new Queue\(\d+\)', f'new Queue({par})')
 sub('content/page.js', r'const MAX_OUTSTANDING = \d+;', f'const MAX_OUTSTANDING = {par};')
