@@ -18,7 +18,7 @@ import { STOP } from '../lib/pfml.js';
 
 const WASM_URL = chrome.runtime.getURL('vendor/wllama/wllama.wasm');
 const N_CTX = 8192; // shared by all slots (unified KV cache)
-const N_PARALLEL = 4;
+const N_PARALLEL = 8; // = n_ubatch (see load)
 const DL_STREAMS = 3;
 
 class EngineError extends Error {
@@ -113,13 +113,13 @@ async function load(modelId) {
     const inst = new Wllama({ default: WASM_URL }, { logger, suppressNativeLog: false });
     inst.setCompat(null); // never fetch the CDN compat build (Chromium has JSPI + Memory64)
     try {
-      // n_ubatch 4: on ggml-webgpu, micro-batches of <=4 tokens take the fast mat-vec path
-      // (prompt 5.8 ms/token vs 7.8 at the default 512, 16.5 at 16, 31 at 8 — measured, 2B Q4_K_M);
-      // parallel decoding is unaffected and greedy outputs match (one near-tie word in a long text)
-      // swa_full: the SWA cache already spans all 8192 cells here (2048 window x 4 slots), so this costs
+      // n_ubatch 8 = slots: with patches 0006/0007 ggml-webgpu computes micro-batches of up to 16 tokens
+      // with its mat-vec shaders, so one decode step of all 8 slots is one graph, and prompts go 8 tokens
+      // per graph (with the stock shaders more than 4 tokens per graph cost more than they saved)
+      // swa_full: the SWA cache already spans all 8192 cells here (2048 window x 8 slots), so this costs
       // no memory; it tells the server that sequences can be truncated, which stops it from saving a
       // "context checkpoint" (a chain of GPU readbacks) at the end of every prompt
-      await inst.loadModel([file], { n_ctx: N_CTX, n_parallel: N_PARALLEL, n_ubatch: 4, swa_full: true, n_gpu_layers: gpu ? 999 : 0, n_threads: gpu ? nThreads : Math.max(1, (navigator.hardwareConcurrency || 2) >> 1) });
+      await inst.loadModel([file], { n_ctx: N_CTX, n_parallel: N_PARALLEL, n_ubatch: N_PARALLEL, swa_full: true, n_gpu_layers: gpu ? 999 : 0, n_threads: gpu ? nThreads : Math.max(1, (navigator.hardwareConcurrency || 2) >> 1) });
     } catch (e) {
       try {
         await inst.exit();

@@ -20,7 +20,7 @@ function applySettings(s, changes) {
   const prevModel = settings.model;
   settings = s;
   glossary = parseGlossary(s.glossary);
-  queue.setLimit(Math.max(1, Math.min(4, Number(s.concurrency) || 4)));
+  queue.setLimit(Math.max(1, Math.min(8, Number(s.concurrency) || 8)));
   cache.clear();
   if (changes?.idleUnloadMin) engineConfig();
   if (changes?.model && prevModel !== s.model) engineUnloadIfLoaded();
@@ -84,7 +84,7 @@ class Queue {
   }
 }
 
-const queue = new Queue(4);
+const queue = new Queue(8);
 
 // Small LRU cache of finished translations.
 class LRU {

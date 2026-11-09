@@ -22,7 +22,7 @@
   const TAG_RE = /<(\/?)x(\d+)(\/?)>/g;
   // = engine slots: keeping more in flight would commit to an order (in the background queue)
   // before all visible units are known; each pick happens when a slot frees up instead
-  const MAX_OUTSTANDING = 4;
+  const MAX_OUTSTANDING = 8;
 
   // ---------------------------------------------------------------- state
   const S = {

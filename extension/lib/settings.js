@@ -8,7 +8,7 @@ export const DEFAULTS = Object.freeze({
   altTargetLang: 'en',      // used when the source is already in targetLang
   form: '',                 // '' (model decides) | 'plain' (だ・である) | 'polite' (です・ます); Japanese only
   pageMode: 'replace',      // 'replace' | 'bilingual'
-  concurrency: 4,           // parallel requests (the engine has 4 slots)
+  concurrency: 8,           // parallel requests (the engine has 8 slots)
   useTitleContext: true,    // pass the page title as translation context
   glossary: '',             // one "source = target" per line
 });

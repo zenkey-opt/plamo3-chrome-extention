@@ -39,7 +39,7 @@ async function init() {
   $('#altTargetLang').addEventListener('change', (e) => save({ altTargetLang: e.target.value }));
   $('#useTitleContext').addEventListener('change', (e) => save({ useTitleContext: e.target.checked }));
   $('#concurrency').addEventListener('change', (e) => {
-    const n = Math.max(1, Math.min(4, Math.round(Number(e.target.value) || DEFAULTS.concurrency)));
+    const n = Math.max(1, Math.min(8, Math.round(Number(e.target.value) || DEFAULTS.concurrency)));
     e.target.value = n;
     save({ concurrency: n });
   });

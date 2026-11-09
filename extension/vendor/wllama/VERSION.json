@@ -13,14 +13,16 @@
       "llama.cpp/0002-webgpu-profile-summary.patch",
       "llama.cpp/0003-webgpu-fuse-norm-add-norm.patch",
       "llama.cpp/0004-webgpu-kquant-matvec-wg-size.patch",
-      "llama.cpp/0005-webgpu-no-cpu-waits.patch"
+      "llama.cpp/0005-webgpu-no-cpu-waits.patch",
+      "llama.cpp/0006-webgpu-mat-vec-up-to-16-cols.patch",
+      "llama.cpp/0007-webgpu-kquant-matvec-few-threads.patch"
     ],
-    "builtAt": "2026-11-09T10:35:42+00:00"
+    "builtAt": "2026-11-09T15:54:46+00:00"
   },
   "vendoredAt": "2026-11-06T01:33:31.199Z",
   "sha256": {
     "index.js(original)": "dc8299b8786b34acc64e71b152f00df760b099eeba42410ea584eaaad8dbe5a0",
-    "wllama.wasm": "948a06dcd180cf44949645a5b870c055761a2398791ed7cd55f51dade4989bff",
+    "wllama.wasm": "09485dc614b19b897553837494e7a5c530deab514336e117a1746704c335b0a1",
     "wllama.js(local build)": "1cdbb0231eeda4226d56756a6a98815a941b41445c7916dc9c154c0b737cacec"
   }
 }
