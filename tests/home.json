@@ -1,0 +1,1 @@
+{"prompt": "<|plamo:tag|>dataset<|plamo:msg|>translation<|plamo:tag|>input<|plamo:msg|>Home<|plamo:tag|>output<|plamo:key|>lang<|plamo:val|>ja<|plamo:msg|>", "n_predict": 64, "temperature": 0, "repeat_penalty": 1.0, "stop": ["<|plamo:tag|>", "<|plamo:bos|>"]}

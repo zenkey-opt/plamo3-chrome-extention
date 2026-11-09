@@ -1,0 +1,80 @@
+ggml-webgpu: size the K-quant MMVQ mat-vec workgroup to the row (K = 2560 -> 160 threads instead
+of 256 with 6 of 16 block slots idle). Same blocks per thread, same reductions: identical results.
+
+diff --git a/ggml/src/ggml-webgpu/ggml-webgpu-shader-lib.hpp b/ggml/src/ggml-webgpu/ggml-webgpu-shader-lib.hpp
+--- a/ggml/src/ggml-webgpu/ggml-webgpu-shader-lib.hpp
++++ b/ggml/src/ggml-webgpu/ggml-webgpu-shader-lib.hpp
+@@ -970,10 +970,12 @@ struct ggml_webgpu_mul_mat_vec_pipeline_key {
+     uint32_t  num_cols;
+     bool      use_mmvq;
+     bool      src_overlap;
++    uint32_t  wg_size;
+ 
+     bool operator==(const ggml_webgpu_mul_mat_vec_pipeline_key & other) const {
+         return src0_type == other.src0_type && src1_type == other.src1_type && vectorized == other.vectorized &&
+-               num_cols == other.num_cols && use_mmvq == other.use_mmvq && src_overlap == other.src_overlap;
++               num_cols == other.num_cols && use_mmvq == other.use_mmvq && src_overlap == other.src_overlap &&
++               wg_size == other.wg_size;
+     }
+ };
+ 
+@@ -986,10 +988,38 @@ struct ggml_webgpu_mul_mat_vec_pipeline_key_hash {
+         ggml_webgpu_hash_combine(seed, key.num_cols);
+         ggml_webgpu_hash_combine(seed, key.use_mmvq);
+         ggml_webgpu_hash_combine(seed, key.src_overlap);
++        ggml_webgpu_hash_combine(seed, key.wg_size);
+         return seed;
+     }
+ };
+ 
++// K-quant MMVQ mat-vec: 16 threads per 256-value block, and a workgroup of WEBGPU_MUL_MAT_VEC_WG_SIZE
++// threads walks a row 16 blocks at a time. A short row (K = 2560: 10 blocks) leaves whole subgroups
++// idle in every workgroup, so give such rows a workgroup of just enough subgroups (of 32) instead.
++// Each thread still covers exactly the same blocks and the reductions see the same values (the idle
++// threads only ever added zeros), so the results are unchanged.
++inline uint32_t ggml_webgpu_mul_mat_vec_wg_size(const ggml_tensor * src0, bool use_mmvq) {
++    if (use_mmvq) {
++        switch (src0->type) {
++            case GGML_TYPE_Q2_K:
++            case GGML_TYPE_Q3_K:
++            case GGML_TYPE_Q4_K:
++            case GGML_TYPE_Q5_K:
++            case GGML_TYPE_Q6_K:
++                {
++                    const uint32_t blocks = (uint32_t) (src0->ne[0] / 256);
++                    if (blocks > 0 && blocks < WEBGPU_MUL_MAT_VEC_WG_SIZE / 16) {
++                        return 32 * ((blocks + 1) / 2);
++                    }
++                    break;
++                }
++            default:
++                break;
++        }
++    }
++    return WEBGPU_MUL_MAT_VEC_WG_SIZE;
++}
++
+ struct ggml_webgpu_mul_mat_vec_shader_decisions {
+     uint32_t wg_size;
+     uint32_t outputs_per_wg;
+@@ -2025,6 +2055,7 @@ class ggml_webgpu_shader_lib {
+         key.use_mmvq =
+             ggml_webgpu_can_use_mmvq(context.src0, context.src1, context.supports_dot_product, context.vendor);
+         key.src_overlap = src_overlap;
++        key.wg_size     = ggml_webgpu_mul_mat_vec_wg_size(context.src0, key.use_mmvq);
+ 
+         auto it = mul_mat_vec_pipelines.find(key);
+         if (it != mul_mat_vec_pipelines.end()) {
+@@ -2135,8 +2166,11 @@ class ggml_webgpu_shader_lib {
+         // VEC/SCALAR controls
+         defines.push_back(key.vectorized ? "VEC" : "SCALAR");
+ 
+-        uint32_t wg_size        = WEBGPU_MUL_MAT_VEC_WG_SIZE;
++        uint32_t wg_size        = key.wg_size;
+         uint32_t outputs_per_wg = WEBGPU_MUL_MAT_VEC_FLOAT_OUTPUTS_PER_WG;
++        if (wg_size != WEBGPU_MUL_MAT_VEC_WG_SIZE) {
++            variant += "_wg" + std::to_string(wg_size);
++        }
+ 
+         if (key.src0_type == GGML_TYPE_Q1_0) {
+             outputs_per_wg = WEBGPU_MUL_MAT_VEC_LEGACY_Q_OUTPUTS_PER_WG;

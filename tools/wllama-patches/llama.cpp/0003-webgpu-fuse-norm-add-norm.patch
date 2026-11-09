@@ -1,0 +1,363 @@
+ggml-webgpu: fuse RMS_NORM, MUL, ADD, RMS_NORM, MUL (post-norm + residual add + next pre-norm)
+into one dispatch. Bit-identical to the unfused ops (same workgroup size and reduction order).
+
+diff --git a/ggml/src/ggml-webgpu/ggml-webgpu.cpp b/ggml/src/ggml-webgpu/ggml-webgpu.cpp
+--- a/ggml/src/ggml-webgpu/ggml-webgpu.cpp
++++ b/ggml/src/ggml-webgpu/ggml-webgpu.cpp
+@@ -94,6 +94,7 @@ static inline uint32_t ggml_webgpu_u32_from_f32(float value) {
+ #define WEBGPU_PARAMS_BUF_SIZE_BYTES             128  // enough for 32 parameters
+ #define WEBGPU_SET_ROWS_ERROR_BUF_SIZE_BYTES     4
+ #define WEBGPU_STORAGE_BUF_BINDING_MULT          4    // a storage buffer binding size must be a multiple of 4
++#define WEBGPU_NORM_ADD_NORM_MAX_ELEMS           8u   // per thread: rows up to 8 * max workgroup size
+ 
+ /* End Constants */
+ 
+@@ -2777,6 +2778,64 @@ static std::optional<webgpu_encoded_op> ggml_webgpu_rms_norm_mul(webgpu_context
+     return ggml_backend_webgpu_build(ctx, pipeline, params, entries, wg_x, wg_y);
+ }
+ 
++// nodes: RMS_NORM, MUL, ADD, RMS_NORM, MUL (checked by ggml_webgpu_can_fuse_norm_add_norm)
++static webgpu_encoded_op ggml_webgpu_norm_add_norm(webgpu_context & ctx, ggml_tensor ** n) {
++    ggml_tensor * rn1 = n[0], *mul1 = n[1], *add = n[2], *rn2 = n[3], *mul2 = n[4];
++    ggml_tensor * x  = rn1->src[0];
++    ggml_tensor * w1 = mul1->src[1];
++    ggml_tensor * r  = add->src[0] == mul1 ? add->src[1] : add->src[0];
++    ggml_tensor * w2 = mul2->src[1];
++    ggml_tensor * h  = add;
++    ggml_tensor * y  = mul2;
++
++    const ggml_webgpu_merged_binding_range act = ggml_webgpu_tensor_merged_binding_range(ctx, { x, r, h, y });
++    const ggml_webgpu_merged_binding_range wts = ggml_webgpu_tensor_merged_binding_range(ctx, { w1, w2 });
++    const size_t                           fs  = sizeof(float);
++
++    std::vector<uint32_t> params = {
++        ggml_webgpu_tensor_merged_element_offset(x, act),
++        ggml_webgpu_tensor_merged_element_offset(r, act),
++        ggml_webgpu_tensor_merged_element_offset(h, act),
++        ggml_webgpu_tensor_merged_element_offset(y, act),
++        ggml_webgpu_tensor_merged_element_offset(w1, wts),
++        ggml_webgpu_tensor_merged_element_offset(w2, wts),
++        (uint32_t) (x->nb[1] / fs),
++        (uint32_t) (x->nb[2] / fs),
++        (uint32_t) (x->nb[3] / fs),
++        (uint32_t) (r->nb[1] / fs),
++        (uint32_t) (r->nb[2] / fs),
++        (uint32_t) (r->nb[3] / fs),
++        (uint32_t) (h->nb[1] / fs),
++        (uint32_t) (h->nb[2] / fs),
++        (uint32_t) (h->nb[3] / fs),
++        (uint32_t) (y->nb[1] / fs),
++        (uint32_t) (y->nb[2] / fs),
++        (uint32_t) (y->nb[3] / fs),
++        (uint32_t) x->ne[0],
++        (uint32_t) x->ne[1],
++        (uint32_t) x->ne[2],
++        (uint32_t) x->ne[3],
++        ggml_webgpu_u32_from_f32(ggml_get_op_params_f32(rn1, 0)),
++        ggml_webgpu_u32_from_f32(ggml_get_op_params_f32(rn2, 0)),
++    };
++
++    std::vector<wgpu::BindGroupEntry> entries = {
++        ggml_webgpu_make_bind_group_entry(0, ggml_webgpu_tensor_buf(x), act.offset, act.size),
++        ggml_webgpu_make_bind_group_entry(1, ggml_webgpu_tensor_buf(w1), wts.offset, wts.size),
++    };
++
++    ggml_webgpu_shader_lib_context shader_lib_ctx = {};
++    shader_lib_ctx.max_wg_size = ctx->global_ctx->capabilities.limits.maxComputeInvocationsPerWorkgroup;
++    webgpu_pipeline pipeline =
++        ctx->shader_lib->get_norm_add_norm_pipeline(shader_lib_ctx, WEBGPU_NORM_ADD_NORM_MAX_ELEMS);
++
++    uint32_t wg_x;
++    uint32_t wg_y;
++    compute_2d_workgroups(ggml_nrows(y), ctx->global_ctx->capabilities.limits.maxComputeWorkgroupsPerDimension, wg_x,
++                          wg_y);
++    return ggml_backend_webgpu_build(ctx, pipeline, params, entries, wg_x, wg_y);
++}
++
+ static webgpu_encoded_op ggml_webgpu_row_norm(webgpu_context & ctx, ggml_tensor * src, ggml_tensor * dst) {
+     std::vector<uint32_t> params = {
+         (uint32_t) (ggml_webgpu_tensor_misalignment(ctx, src) / ggml_type_size(src->type)),
+@@ -3342,6 +3401,81 @@ static bool ggml_webgpu_can_fuse_rms_norm_mul(const struct ggml_cgraph * cgraph,
+     return true;
+ }
+ 
++static bool ggml_webgpu_tensor_ranges_overlap(const ggml_tensor * a, const ggml_tensor * b) {
++    const size_t a_off = ggml_webgpu_tensor_offset(a);
++    const size_t b_off = ggml_webgpu_tensor_offset(b);
++    return a->buffer == b->buffer && a_off < b_off + ggml_nbytes(b) && b_off < a_off + ggml_nbytes(a);
++}
++
++static bool ggml_webgpu_tensor_same_location(const ggml_tensor * a, const ggml_tensor * b) {
++    return a->buffer == b->buffer && ggml_webgpu_tensor_offset(a) == ggml_webgpu_tensor_offset(b) &&
++           a->nb[1] == b->nb[1] && a->nb[2] == b->nb[2] && a->nb[3] == b->nb[3];
++}
++
++// RMS_NORM, MUL (weight), ADD (residual), RMS_NORM, MUL (weight): the post-norm + residual add of one
++// sub-block and the pre-norm of the next one (PLaMo 3, Gemma). The ADD result (the new residual) and
++// the last MUL are used outside, the other three only inside.
++static bool ggml_webgpu_can_fuse_norm_add_norm(webgpu_context & ctx, const struct ggml_cgraph * cgraph, int node_idx) {
++    static const enum ggml_op ops[] = { GGML_OP_RMS_NORM, GGML_OP_MUL, GGML_OP_ADD, GGML_OP_RMS_NORM, GGML_OP_MUL };
++    const int                 outputs[] = { node_idx + 2, node_idx + 4 };
++    if (!ggml_can_fuse_subgraph(cgraph, node_idx, 5, ops, outputs, 2)) {
++        return false;
++    }
++    ggml_tensor ** n   = cgraph->nodes + node_idx;
++    ggml_tensor *  rn1 = n[0], *mul1 = n[1], *add = n[2], *rn2 = n[3], *mul2 = n[4];
++    if (mul1->src[0] != rn1 || (add->src[0] != mul1 && add->src[1] != mul1) || rn2->src[0] != add ||
++        mul2->src[0] != rn2) {
++        return false;
++    }
++    ggml_tensor * x  = rn1->src[0];
++    ggml_tensor * w1 = mul1->src[1];
++    ggml_tensor * r  = add->src[0] == mul1 ? add->src[1] : add->src[0];
++    ggml_tensor * w2 = mul2->src[1];
++    ggml_tensor * h  = add;
++    ggml_tensor * y  = mul2;
++    for (const ggml_tensor * t : { x, w1, r, h, w2, y }) {
++        if (t->type != GGML_TYPE_F32 || t->nb[0] != sizeof(float)) {
++            return false;
++        }
++    }
++    if (!ggml_are_same_shape(x, r) || !ggml_are_same_shape(x, h) || !ggml_are_same_shape(x, y) ||
++        !ggml_are_same_shape(x, rn1) || !ggml_are_same_shape(x, rn2)) {
++        return false;
++    }
++    // per-column weights shared by every row
++    for (const ggml_tensor * w : { w1, w2 }) {
++        if (w->ne[0] != x->ne[0] || ggml_nelements(w) != x->ne[0] || !ggml_is_contiguous(w)) {
++            return false;
++        }
++    }
++    if (CEIL_DIV((uint32_t) x->ne[0], ctx->global_ctx->capabilities.limits.maxComputeInvocationsPerWorkgroup) >
++        WEBGPU_NORM_ADD_NORM_MAX_ELEMS) {
++        return false;
++    }
++    // one binding covers the activations, one the weights
++    if (x->buffer != r->buffer || x->buffer != h->buffer || x->buffer != y->buffer || w1->buffer != w2->buffer) {
++        return false;
++    }
++    // A row's workgroup reads x and r before it writes h and y. Rows run in parallel, so an output may
++    // share memory with an input or with the other output only exactly (in place), never shifted.
++    const ggml_tensor * pairs[][2] = {
++        { h, x },
++        { h, r },
++        { y, x },
++        { y, r },
++        { h, y }
++    };
++    for (const auto & p : pairs) {
++        if (ggml_webgpu_tensor_ranges_overlap(p[0], p[1]) && !ggml_webgpu_tensor_same_location(p[0], p[1])) {
++            return false;
++        }
++    }
++    if (ggml_webgpu_tensor_ranges_overlap(h, y)) {
++        return false;  // h is read after y would have been written
++    }
++    return true;
++}
++
+ static bool ggml_webgpu_can_fuse_gdn_cache(const struct ggml_cgraph * cgraph, int node_idx, int & num_encoded_ops) {
+     const ggml_tensor * gdn = cgraph->nodes[node_idx];
+ 
+@@ -3505,6 +3639,10 @@ static std::optional<webgpu_encoded_op> ggml_webgpu_encode(webgpu_context ctx,
+         case GGML_OP_REPEAT:
+             return ggml_webgpu_repeat(ctx, src0, node);
+         case GGML_OP_RMS_NORM:
++            if (ggml_webgpu_can_fuse_norm_add_norm(ctx, cgraph, node_idx)) {
++                num_encoded_ops = 5;
++                return ggml_webgpu_norm_add_norm(ctx, nodes + node_idx);
++            }
+             if (ggml_webgpu_can_fuse_rms_norm_mul(cgraph, node_idx)) {
+                 num_encoded_ops        = 2;
+                 ggml_tensor * mul_node = nodes[node_idx + 1];
+diff --git a/ggml/src/ggml-webgpu/ggml-webgpu-shader-lib.hpp b/ggml/src/ggml-webgpu/ggml-webgpu-shader-lib.hpp
+--- a/ggml/src/ggml-webgpu/ggml-webgpu-shader-lib.hpp
++++ b/ggml/src/ggml-webgpu/ggml-webgpu-shader-lib.hpp
+@@ -303,6 +303,12 @@ struct ggml_webgpu_rms_norm_mul_shader_decisions {
+     bool     src_overlap = false;
+ };
+ 
++/** RMS_NORM + MUL + ADD + RMS_NORM + MUL **/
++struct ggml_webgpu_norm_add_norm_shader_decisions {
++    uint32_t wg_size   = 0;
++    uint32_t max_elems = 0;
++};
++
+ /** Pad **/
+ struct ggml_webgpu_pad_pipeline_key {
+     bool circular;
+@@ -1309,6 +1315,7 @@ class ggml_webgpu_shader_lib {
+                        webgpu_pipeline,
+                        ggml_webgpu_rms_norm_mul_pipeline_key_hash>
+         rms_norm_mul_pipelines;
++    std::unordered_map<int, webgpu_pipeline> norm_add_norm_pipelines;  // key is fixed, no variants
+     std::unordered_map<ggml_webgpu_upscale_pipeline_key, webgpu_pipeline, ggml_webgpu_upscale_pipeline_key_hash>
+         upscale_pipelines;
+ 
+@@ -2743,6 +2750,26 @@ class ggml_webgpu_shader_lib {
+         return rms_norm_mul_pipelines[key];
+     }
+ 
++    // rows up to max_elems * max_wg_size elements
++    webgpu_pipeline get_norm_add_norm_pipeline(const ggml_webgpu_shader_lib_context & context, uint32_t max_elems) {
++        auto it = norm_add_norm_pipelines.find(0);
++        if (it != norm_add_norm_pipelines.end()) {
++            return it->second;
++        }
++        std::vector<std::string> defines;
++        // same workgroup size as RMS_NORM_MUL, so that the reductions add up in the same order
++        defines.push_back(std::string("WG_SIZE=") + std::to_string(context.max_wg_size));
++        defines.push_back(std::string("MAX_ELEMS=") + std::to_string(max_elems));
++        auto processed                = preprocessor.preprocess(wgsl_norm_add_norm, defines);
++        auto pipeline_decisions       = std::make_shared<ggml_webgpu_norm_add_norm_shader_decisions>();
++        pipeline_decisions->wg_size   = context.max_wg_size;
++        pipeline_decisions->max_elems = max_elems;
++        webgpu_pipeline pipeline      = ggml_webgpu_create_pipeline(device, processed, "NORM_ADD_NORM");
++        pipeline.context              = pipeline_decisions;
++        norm_add_norm_pipelines[0]    = pipeline;
++        return norm_add_norm_pipelines[0];
++    }
++
+     webgpu_pipeline get_binary_pipeline(const ggml_webgpu_shader_lib_context & context, bool src_overlap) {
+         ggml_webgpu_binary_pipeline_key key = {};
+         key.type                            = context.dst->type;
+diff --git a/ggml/src/ggml-webgpu/wgsl-shaders/norm_add_norm.wgsl b/ggml/src/ggml-webgpu/wgsl-shaders/norm_add_norm.wgsl
+new file mode 100644
+--- /dev/null
++++ b/ggml/src/ggml-webgpu/wgsl-shaders/norm_add_norm.wgsl
+@@ -0,0 +1,135 @@
++// Fused end of a post-norm transformer sub-block plus the next pre-norm (PLaMo 3, Gemma style):
++//   h = rms_norm(x) * w1 + r      (attn/ffn post-norm and the residual add)
++//   y = rms_norm(h) * w2          (pre-norm of the next sub-block)
++// i.e. RMS_NORM, MUL, ADD, RMS_NORM, MUL in one dispatch, one workgroup per row.
++// The arithmetic mirrors rms_norm_mul.wgsl and binary.wgsl (same WG_SIZE, same reduction order),
++// and rms_norm(x) * w1 goes through memory before the add, as it does between separate kernels,
++// so the compiler cannot contract it into an fma: the results are bit-identical to the unfused ops.
++
++@group(0) @binding(0)
++var<storage, read_write> act: array<f32>;  // x, r, h, y (one range of the compute buffer)
++
++@group(0) @binding(1)
++var<storage, read_write> wts: array<f32>;  // w1, w2
++
++@group(0) @binding(2)
++var<uniform> params: Params;
++
++struct Params {
++    offset_x: u32,
++    offset_r: u32,
++    offset_h: u32,
++    offset_y: u32,
++    offset_w1: u32,
++    offset_w2: u32,
++
++    stride_x1: u32,
++    stride_x2: u32,
++    stride_x3: u32,
++    stride_r1: u32,
++    stride_r2: u32,
++    stride_r3: u32,
++    stride_h1: u32,
++    stride_h2: u32,
++    stride_h3: u32,
++    stride_y1: u32,
++    stride_y2: u32,
++    stride_y3: u32,
++
++    ne0: u32,
++    ne1: u32,
++    ne2: u32,
++    ne3: u32,
++
++    eps1: f32,
++    eps2: f32
++};
++
++var<workgroup> scratch: array<f32, WG_SIZE>;
++
++// tree reduction of rms_norm_mul.wgsl; the trailing barrier lets scratch be reused
++fn workgroup_sum(lid: u32, v: f32) -> f32 {
++    scratch[lid] = v;
++
++    workgroupBarrier();
++
++    var offset: u32 = WG_SIZE / 2;
++    while (offset > 0) {
++        if (lid < offset) {
++            scratch[lid] += scratch[lid + offset];
++        }
++        offset = offset / 2;
++        workgroupBarrier();
++    }
++    let total = scratch[0];
++    workgroupBarrier();
++    return total;
++}
++
++@compute @workgroup_size(WG_SIZE)
++fn main(@builtin(workgroup_id) wid: vec3<u32>,
++        @builtin(num_workgroups) num_wg: vec3<u32>,
++        @builtin(local_invocation_id) lid: vec3<u32>) {
++
++    // one workgroup per row
++    var i = wid.x + wid.y * num_wg.x;
++    if (i >= params.ne1 * params.ne2 * params.ne3) {
++        return;
++    }
++    let i3 = i / (params.ne2 * params.ne1);
++    i = i % (params.ne2 * params.ne1);
++    let i2 = i / params.ne1;
++    let i1 = i % params.ne1;
++    let x_row = params.offset_x + i3 * params.stride_x3 + i2 * params.stride_x2 + i1 * params.stride_x1;
++    let r_row = params.offset_r + i3 * params.stride_r3 + i2 * params.stride_r2 + i1 * params.stride_r1;
++    let h_row = params.offset_h + i3 * params.stride_h3 + i2 * params.stride_h2 + i1 * params.stride_h1;
++    let y_row = params.offset_y + i3 * params.stride_y3 + i2 * params.stride_y2 + i1 * params.stride_y1;
++
++    let elems = (params.ne0 + WG_SIZE - 1) / WG_SIZE;
++
++    // rms_norm(x)
++    var sum = 0.0f;
++    var col = lid.x;
++    for (var j: u32 = 0; j < elems; j++) {
++        if (col >= params.ne0) {
++            break;
++        }
++        sum += pow(act[x_row + col], 2.0);
++        col += WG_SIZE;
++    }
++    sum = workgroup_sum(lid.x, sum);
++    let scale1 = 1.0/sqrt(sum/f32(params.ne0) + params.eps1);
++
++    // h = rms_norm(x) * w1, then + r. Every row is handled by one workgroup and every element by one
++    // thread, so reading r before writing h also covers h stored in place of r (or of x).
++    var r_vals: array<f32, MAX_ELEMS>;
++    for (var j: u32 = 0; j < MAX_ELEMS; j++) {
++        let c = lid.x + j * WG_SIZE;
++        if (c < params.ne0) {
++            r_vals[j] = act[r_row + c];
++            act[h_row + c] = scale1 * act[x_row + c] * wts[params.offset_w1 + c];
++        }
++    }
++    storageBarrier();
++    var h_vals: array<f32, MAX_ELEMS>;
++    var sum2 = 0.0f;
++    for (var j: u32 = 0; j < MAX_ELEMS; j++) {
++        let c = lid.x + j * WG_SIZE;
++        if (c < params.ne0) {
++            let h = act[h_row + c] + r_vals[j];
++            act[h_row + c] = h;
++            h_vals[j] = h;
++            sum2 += pow(h, 2.0);
++        }
++    }
++
++    // y = rms_norm(h) * w2 (y may reuse the memory of x or r: all of their reads are done)
++    sum2 = workgroup_sum(lid.x, sum2);
++    let scale2 = 1.0/sqrt(sum2/f32(params.ne0) + params.eps2);
++    for (var j: u32 = 0; j < MAX_ELEMS; j++) {
++        let c = lid.x + j * WG_SIZE;
++        if (c < params.ne0) {
++            act[y_row + c] = scale2 * h_vals[j] * wts[params.offset_w2 + c];
++        }
++    }
++}

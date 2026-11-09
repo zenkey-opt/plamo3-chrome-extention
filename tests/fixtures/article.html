@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Understanding Transformers — A Practical Guide</title>
+  <style>
+    body { font: 16px/1.6 Georgia, serif; max-width: 760px; margin: 0 auto; padding: 0 20px 80px; color: #222; }
+    nav { display: flex; gap: 18px; padding: 14px 0; border-bottom: 1px solid #ddd; font-family: system-ui, sans-serif; font-size: 14px; }
+    nav a { color: #0645ad; text-decoration: none; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; background: #0645ad; color: #fff; border: 0; font: 14px system-ui; cursor: pointer; }
+    .note { background: #fff8e1; border-left: 4px solid #f0b400; padding: 8px 14px; }
+    table { border-collapse: collapse; width: 100%; font-family: system-ui; font-size: 14px; }
+    td, th { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+    pre { background: #f5f5f5; padding: 12px; overflow: auto; }
+    .card { display: block; border: 1px solid #ddd; border-radius: 8px; padding: 10px 14px; margin: 10px 0; color: inherit; text-decoration: none; }
+    .card div:first-child { font-weight: bold; }
+    footer { margin-top: 40px; color: #666; font-size: 13px; font-family: system-ui; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="#home">Home</a> · <a href="#docs">Documentation</a> · <a href="#blog">Blog</a> · <a href="#about">About us</a>
+  </nav>
+  <h1>Understanding Transformers</h1>
+  <p class="byline">Posted by <a href="#alice" id="author">Alice Smith</a> on <time datetime="2026-03-03">March 3, 2026</time></p>
+
+  <p id="p1">The <a href="https://en.wikipedia.org/wiki/Transformer" id="link1">Transformer</a> is a deep learning architecture that relies entirely on an <strong>attention mechanism</strong> to draw global dependencies between input and output. It was introduced in the paper <em>Attention Is All You Need</em> by Vaswani et al. in 2017.</p>
+
+  <p id="p2">To install the reference implementation, run <code>pip install transformers</code> and then import the model with <code>from transformers import AutoModel</code>. If you see an error, check that your Python version is at least 3.9.</p>
+
+  <h2 id="h-why">Why does attention matter?</h2>
+  <p id="p3">Before transformers, most sequence models processed tokens one at a time, which made training slow and long-range dependencies hard to learn.<br>Attention lets every token look at every other token in a single step.</p>
+
+  <div class="note" id="note"><b>Note:</b> This guide assumes basic familiarity with neural networks. If you are new to the topic, read <a href="#intro" id="link2">our introduction</a> first.</div>
+
+  <h2>Key components</h2>
+  <ul id="list">
+    <li>Multi-head self-attention, which runs several attention operations in parallel.</li>
+    <li>Position-wise feed-forward networks applied to each token independently.</li>
+    <li>Positional encodings that inject information about token order.</li>
+  </ul>
+
+  <p><button class="btn" id="btn" onclick="this.dataset.clicked = (Number(this.dataset.clicked || 0) + 1)"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6h8" stroke="#fff" stroke-width="2"/></svg>Download the slides</button></p>
+
+  <table id="tbl">
+    <tr><th>Model</th><th>Parameters</th><th>Release year</th></tr>
+    <tr><td>Original Transformer</td><td>65 million</td><td>2017</td></tr>
+    <tr><td>Large language model</td><td>175 billion</td><td>2020</td></tr>
+  </table>
+
+  <pre id="code">def attention(q, k, v):
+    # scaled dot-product attention
+    return softmax(q @ k.T / sqrt(d)) @ v</pre>
+
+  <a class="card" href="#next" id="cardlink"><div>Next chapter: Training at scale</div><div>Learn how large models are trained on thousands of GPUs.</div></a>
+
+  <p id="ja">この段落はすでに日本語なので、翻訳されないはずです。</p>
+
+  <div id="dynamic"></div>
+
+  <footer id="footer">© 2026 Example Press. All rights reserved. <a href="#privacy">Privacy policy</a></footer>
+
+  <script>
+    // simulate content that arrives later (infinite scroll / SPA)
+    setTimeout(() => {
+      const p = document.createElement('p');
+      p.id = 'late';
+      p.innerHTML = 'This paragraph was added <i>dynamically</i> two seconds after the page loaded.';
+      document.getElementById('dynamic').appendChild(p);
+    }, 2000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+{
+  "short": [
+    "The quick brown fox jumps over the lazy dog.",
+    "Please close the window before you leave the room.",
+    "Our office will be closed on Monday for maintenance."
+  ],
+  "medium": [
+    "Machine translation is use of computational techniques to translate text or speech from one language to another, including the contextual, idiomatic and pragmatic nuances of both languages. While some language models are capable of generating comprehensible results, machine translation tools remain the most reliable option for people who need accurate translations.",
+    "The library has extended its opening hours during the exam period. From next Monday until the end of the month, the reading rooms will stay open until midnight, and students can borrow up to ten books at a time. Group study rooms must be booked online at least one day in advance.",
+    "Volcanoes form where molten rock from deep inside the Earth reaches the surface. Some erupt explosively and throw ash high into the atmosphere, while others release slow rivers of lava. Scientists monitor small earthquakes and changes in the shape of the ground to predict when an eruption may happen."
+  ],
+  "long": [
+    "WebGPU is an API that exposes the capabilities of GPU hardware for the Web. The API is designed from the ground up to efficiently map to native GPU APIs. WebGPU is not related to WebGL and does not explicitly target OpenGL ES. WebGPU sees physical GPU hardware as GPUAdapters. It provides a connection to an adapter via GPUDevice, which manages resources, and the device's GPUQueues, which execute commands. GPUDevice may have its own memory with high-speed access to the processing units. GPUBuffer and GPUTexture are the physical resources backed by GPU memory. GPUCommandBuffer and GPURenderBundle are containers for user-recorded commands. GPUShaderModule contains shader code. The other resources, such as GPUSampler or GPUBindGroup, configure the way physical resources are used by the GPU.",
+    "The town grew up around a small harbour that was used by fishing boats for centuries. In the nineteenth century a railway line connected it to the capital, and visitors began to arrive in summer to enjoy the beaches and the mild climate. Large hotels were built along the seafront, and the old fish market was turned into a covered hall for concerts and dances. After the Second World War, cheap flights to warmer countries drew many tourists away, and several hotels closed. Today the town is known for its arts festival, which takes place every September and attracts painters, musicians and writers from all over the country. The harbour is still in use, although most of the boats now take visitors on trips to see seals and seabirds along the rocky coast.",
+    "Good sleep is one of the most important factors for health, yet many adults do not get enough of it. Experts recommend between seven and nine hours a night for most people. A regular schedule helps the body keep its internal clock in balance, so it is best to go to bed and get up at the same times every day, even at weekends. Bright screens in the evening can delay sleep, because the light tells the brain that it is still daytime. Caffeine stays in the body for many hours, which means that a cup of coffee in the afternoon can still affect sleep at night. Regular exercise improves sleep quality, but hard training shortly before bedtime may have the opposite effect. If problems continue for several weeks, it is a good idea to talk to a doctor."
+  ],
+  "page": [
+    "Home",
+    "Contact us",
+    "Read more about our history",
+    "This article is about the history of the town and its harbour.",
+    "The first written record of the settlement dates from the twelfth century.",
+    "Fishing remained the main source of income until the railway arrived.",
+    "Several of the original warehouses have been converted into apartments.",
+    "The museum on the main square displays tools, photographs and boats from the early twentieth century.",
+    "Admission is free for children under twelve and for residents of the county.",
+    "Guided tours start every hour from the entrance hall and last about forty minutes.",
+    "Please note that the upper floor is not accessible by wheelchair at the moment.",
+    "The annual arts festival brings together painters, musicians and writers from across the country, and many events take place outdoors along the harbour walls.",
+    "Tickets for the evening concerts usually sell out within a few days, so we recommend booking early.",
+    "Local restaurants serve fresh fish caught the same morning, often with potatoes and seasonal vegetables.",
+    "In winter, strong winds from the north can make the coastal path dangerous.",
+    "Walkers should check the weather forecast and the tide times before setting out.",
+    "The lighthouse at the end of the pier was automated in 1987 and is no longer staffed.",
+    "Volunteers maintain the gardens around the old chapel, which is open on Sunday afternoons.",
+    "A regular bus service connects the town with the nearest city, and the journey takes about an hour.",
+    "Parking is limited during the summer months, especially near the beach.",
+    "Last updated",
+    "Privacy policy",
+    "Terms of use",
+    "All rights reserved."
+  ]
+}

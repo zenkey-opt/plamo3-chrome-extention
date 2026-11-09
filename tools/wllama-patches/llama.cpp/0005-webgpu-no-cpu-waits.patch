@@ -1,0 +1,81 @@
+ggml-webgpu: no CPU waits in synchronize / events. The queue already orders every transfer and
+get_tensor waits for its own map, while each wait costs a JSPI suspension and a GPU-process round trip.
+
+diff --git a/ggml/src/ggml-webgpu/ggml-webgpu.cpp b/ggml/src/ggml-webgpu/ggml-webgpu.cpp
+--- a/ggml/src/ggml-webgpu/ggml-webgpu.cpp
++++ b/ggml/src/ggml-webgpu/ggml-webgpu.cpp
+@@ -213,6 +213,9 @@ struct webgpu_global_context_struct {
+     wgpu::Queue    queue;
+     uint32_t       command_submit_batch_size = WEBGPU_DEFAULT_COMMAND_SUBMIT_BATCH_SIZE;
+     uint32_t       max_inflight_batches      = UINT32_MAX;
++    // command buffers submitted since the CPU last waited for the queue (the logits readback or
++    // wait_queue); bounds the queued work (and its staged uploads) of a long prompt
++    uint32_t       inflight_batches          = 0;
+ 
+     webgpu_capabilities  capabilities;
+     // Shared buffer to move data from device to host
+@@ -537,8 +540,10 @@ static void ggml_backend_webgpu_check_wait_status(wgpu::WaitStatus wait_status,
+ }
+ 
+ // TODO: these next two functions may want tuning across different platforms and workloads,
++// synchronize no longer waits (see ggml_backend_webgpu_event_record), so a long prompt would queue all of
++// its ubatches at once; wait for the queue every so many command buffers (~28 ubatch graphs of 9 each)
+ static uint32_t ggml_backend_webgpu_get_max_inflight_batches() {
+-    return UINT32_MAX;
++    return 256;
+ }
+ 
+ static uint32_t ggml_backend_webgpu_get_command_submit_batch_size() {
+@@ -3782,7 +3787,7 @@ static ggml_status ggml_backend_webgpu_graph_compute(ggml_backend_t backend, str
+     std::vector<webgpu_encoded_op> commands;
+ 
+     uint32_t num_batched_kernels  = 0;
+-    uint32_t num_inflight_batches = 0;
++    uint32_t & num_inflight_batches = ctx->global_ctx->inflight_batches;  // counted across graphs
+     bool     contains_set_rows    = false;
+     int      num_encoded_ops      = 1;
+     int      node_idx             = 0;
+@@ -3918,13 +3923,17 @@ static void ggml_backend_webgpu_device_event_synchronize(ggml_backend_dev_t dev,
+     event_ctx->recorded = false;
+ }
+ 
++// CPU-side waits for the GPU are not needed for correctness here: everything the CPU hands to the GPU
++// goes through the queue (WriteBuffer copies the data at call time and runs after all earlier
++// submissions), and everything it reads back (get_tensor) is a copy plus a mapAsync that itself waits
++// for all earlier work. In the browser every wait is also a JSPI suspension plus a round trip to the
++// GPU process, ~0.1-0.2 ms even when the GPU is idle and 2-4 ms until a finished submission is noticed,
++// and llama.cpp waits ~20 times per token (input copies, synchronize before reading the logits).
++// So events and synchronize do not wait; reading a result is the only wait, once per token.
+ static void ggml_backend_webgpu_event_record(ggml_backend_t backend, ggml_backend_event_t event) {
+-    ggml_backend_webgpu_context *       backend_ctx = (ggml_backend_webgpu_context *) backend->context;
+-    ggml_backend_webgpu_event_context * event_ctx   = (ggml_backend_webgpu_event_context *) event->context;
+-
+-    event_ctx->future = backend_ctx->webgpu_ctx->global_ctx->queue.OnSubmittedWorkDone(
+-        wgpu::CallbackMode::AllowSpontaneous, [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {});
+-    event_ctx->recorded = true;
++    GGML_UNUSED(backend);
++    ggml_backend_webgpu_event_context * event_ctx = (ggml_backend_webgpu_event_context *) event->context;
++    event_ctx->recorded                           = false;
+ }
+ 
+ static void ggml_backend_webgpu_event_wait(ggml_backend_t backend, ggml_backend_event_t event) {
+@@ -3960,9 +3969,9 @@ static void ggml_backend_webgpu_set_tensor_async(ggml_backend_t backend,
+     }
+ }
+ 
++// see ggml_backend_webgpu_event_record
+ static void ggml_backend_webgpu_synchronize(ggml_backend_t backend) {
+-    ggml_backend_webgpu_context * backend_ctx = (ggml_backend_webgpu_context *) backend->context;
+-    ggml_backend_webgpu_wait_queue(backend_ctx->webgpu_ctx->global_ctx);
++    GGML_UNUSED(backend);
+ }
+ 
+ static ggml_backend_i ggml_backend_webgpu_i = {
+@@ -4140,6 +4149,7 @@ static void ggml_backend_webgpu_buffer_get_tensor(ggml_backend_buffer_t buffer,
+     // Copy the data from the mapped range to the output buffer
+     std::memcpy(data, (const void *) ((const char *) mapped_range + local_offset), size);
+     buf_ctx->global_ctx->get_tensor_staging_buf.Unmap();
++    buf_ctx->global_ctx->inflight_batches = 0;  // the map waited for everything submitted before it
+     WEBGPU_CPU_PROFILE_TOTAL_END(get_tensor, buf_ctx->global_ctx);
+ }
+ 

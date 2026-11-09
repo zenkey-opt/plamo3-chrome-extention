@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>PLaMo 3 Translate Local — 設定</title>
+  <link rel="stylesheet" href="../ui/base.css" />
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <span class="logo big">訳</span>
+      <div>
+        <h1>PLaMo 3 Translate Local</h1>
+        <p class="sub">PFN の翻訳特化 LLM「PLaMo 3 Translate」を、ブラウザの中（WebGPU）で動かして翻訳します。サーバーは不要で、訳文も原文も外部に送信しません。<span class="unofficial">非公式拡張</span></p>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>翻訳モデル</h2>
+      <div class="statusgrid">
+        <div class="k">状態</div>
+        <div class="v"><span id="st" class="status" data-state="checking"><span class="dot"></span><span class="label">確認中…</span></span></div>
+        <div class="k">実行環境</div>
+        <div class="v" id="stBackend">—</div>
+        <div class="k">llama.cpp</div>
+        <div class="v" id="stBuild">—</div>
+        <div class="k">保存領域の使用量</div>
+        <div class="v" id="stStorage">—</div>
+      </div>
+
+      <div class="models" id="models" role="radiogroup" aria-label="使用するモデル"></div>
+
+      <div class="dl" id="dl" hidden>
+        <div class="bar"><span id="dlBar"></span></div>
+        <div class="dlrow">
+          <span id="dlText"></span>
+          <button id="dlCancel" class="ghost small">中止</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="btnLoad" class="primary">今すぐ読み込む</button>
+        <button id="btnUnload" class="ghost">解放して VRAM を空ける</button>
+        <span id="stMsg" class="hint"></span>
+      </div>
+
+      <div class="field idle">
+        <label for="idleUnloadMin">使わないときにモデルを解放するまで（分）</label>
+        <div class="inline">
+          <input id="idleUnloadMin" class="num" type="number" min="0" max="240" step="1" />
+          <span class="hint">0 にすると解放しません。解放後の最初の翻訳は、読み込みに数秒かかります。</span>
+        </div>
+      </div>
+      <p class="hint">モデルは Hugging Face の公式リポジトリ（pfnet）から一度だけダウンロードし、この拡張機能専用の保存領域に置きます。翻訳はこの PC の GPU（WebGPU）で実行します。</p>
+    </section>
+
+    <section class="card">
+      <h2>翻訳</h2>
+      <div class="row2">
+        <div class="field">
+          <label for="targetLang">翻訳先の言語</label>
+          <select id="targetLang"></select>
+        </div>
+        <div class="field">
+          <label for="altTargetLang">原文がすでに翻訳先の言語のとき</label>
+          <select id="altTargetLang"></select>
+        </div>
+      </div>
+      <div class="field">
+        <label>日本語訳の文体</label>
+        <div class="seg" id="form">
+          <button data-v="">モデルに任せる</button>
+          <button data-v="plain">常体（だ・である）</button>
+          <button data-v="polite">敬体（です・ます）</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>ページ翻訳</h2>
+      <div class="field">
+        <label>表示方法</label>
+        <div class="seg" id="pageMode">
+          <button data-v="replace">置換（原文を訳文に置き換え）</button>
+          <button data-v="bilingual">併記（原文の下に訳文）</button>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label for="concurrency">同時に翻訳する数</label>
+          <input id="concurrency" type="number" min="1" max="4" step="1" />
+          <p class="hint">1〜4。まとめて処理するほど速くなります（GPU の負荷は上がります）。</p>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <label class="check">
+            <input id="useTitleContext" type="checkbox" />
+            <span>ページタイトルを文脈として渡す</span>
+          </label>
+        </div>
+      </div>
+      <p class="hint">画面内と少し先だけを順に翻訳し、スクロールや動的に追加された内容は後から翻訳します。</p>
+    </section>
+
+    <section class="card">
+      <h2>用語集</h2>
+      <p class="hint">1 行に 1 語、<code>原語 = 訳語</code> の形式。原文に含まれる語だけがモデルに渡されます。</p>
+      <textarea id="glossary" rows="6" spellcheck="false" placeholder="PLaMo = PLaMo&#10;dashboard = 管理画面&#10;# で始まる行はコメント"></textarea>
+    </section>
+
+    <section class="card">
+      <h2>ショートカット</h2>
+      <div class="statusgrid">
+        <div class="k">選択テキストを翻訳</div>
+        <div class="v" id="scSel">—</div>
+        <div class="k">ページ翻訳 / 原文に戻す</div>
+        <div class="v" id="scPage">—</div>
+      </div>
+      <div class="actions">
+        <button id="btnShortcuts" class="ghost">ショートカットを変更</button>
+        <span class="hint">選択翻訳キーは、何も選択していなければページ翻訳を切り替えます。右クリックメニューからも使えます。</span>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <span>モデル: PLaMo 3 Translate（PLaMo Community License）· 推論: llama.cpp（wllama / WebGPU）</span>
+      <span id="saved" class="saved" aria-live="polite"></span>
+    </footer>
+  </div>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

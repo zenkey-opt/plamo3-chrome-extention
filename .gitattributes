@@ -1,0 +1,5 @@
+# keep LF on Windows checkouts (core.autocrlf=true): bash chokes on CR in scripts, and the patches
+# are applied to upstream sources
+*.sh     text eol=lf
+*.patch  text eol=lf
+*.wgsl   text eol=lf

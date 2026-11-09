@@ -1,0 +1,62 @@
+{
+  "manifest_version": 3,
+  "name": "PLaMo 3 Translate Local",
+  "short_name": "PLaMo3 翻訳",
+  "version": "0.2.0",
+  "description": "PLaMo 3 Translate をブラウザ内（WebGPU）で動かして、選択テキスト・ページ・入力文を翻訳します。サーバー不要・原文は外部に送りません（非公式）。",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoM7KB/YN2ZLsvj/5dXJn9aiBManFAsoKoB1o3qYCqg7EgjKGEw+4+oJmdhG4ajOZ4IBvtjAF/WVJfPXa126S6b26b/QB5VypNcXdHOd6URcLj4U3u1dHSZUdVXFaLf3G4pCkANZYyHNkp0rbiIm0nEaK+O76P4DdG6H/Q0psbs1ivQ0L0QIGodQBJcH1eWalR1T7HV11vAOdOaTRXLgll+afNfuyFAFN9zzigZjhvLM/wpgmhrJxa4eKAC7Hz2WZ1McxIiN1Hgq6WPZBXR6ow4VqQUXbj97rAnzh/akpOGgnBlM5WF0O/J5VB5gv6KYjvYy94MbXdxVATyVlSjb0FwIDAQAB",
+  "minimum_chrome_version": "137",
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "unlimitedStorage",
+    "activeTab",
+    "scripting",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "https://huggingface.co/*",
+    "https://*.hf.co/*",
+    "https://*.huggingface.co/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "PLaMo 3 Translate",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "commands": {
+    "translate-selection": {
+      "suggested_key": {
+        "default": "Alt+T"
+      },
+      "description": "選択テキストを翻訳（未選択ならページ翻訳を切り替え）"
+    },
+    "translate-page": {
+      "suggested_key": {
+        "default": "Alt+P"
+      },
+      "description": "ページを翻訳 / 原文に戻す"
+    }
+  }
+}

@@ -1,0 +1,45 @@
+ggml-webgpu GPU profile (GGML_WEBGPU_GPU_PROFILE builds only; compiled out of release builds):
+count dispatches per shader and log the cumulative totals every 64 graphs, because the browser
+never frees the backend and the stock summary is printed only there.
+
+diff --git a/ggml/src/ggml-webgpu/ggml-webgpu.cpp b/ggml/src/ggml-webgpu/ggml-webgpu.cpp
+--- a/ggml/src/ggml-webgpu/ggml-webgpu.cpp
++++ b/ggml/src/ggml-webgpu/ggml-webgpu.cpp
+@@ -287,6 +287,8 @@ struct webgpu_context_struct {
+ #ifdef GGML_WEBGPU_GPU_PROFILE
+     // Profiling: per-shader GPU time in ms
+     std::unordered_map<std::string, double> shader_gpu_time_ms;
++    std::unordered_map<std::string, uint64_t> shader_gpu_count;
++    uint64_t                                profile_graphs = 0;
+     wgpu::Buffer                            profile_timestamp_dev_buf;
+     wgpu::Buffer                            profile_timestamp_host_buf;
+     wgpu::QuerySet                          profile_timestamp_query_set;
+@@ -3602,6 +3604,7 @@ static void ggml_backend_webgpu_collect_profile_results(webgpu_context &
+         // WebGPU timestamps are in ns; convert to ms.
+         const double elapsed_ms = double(ts_data[2 * i + 1] - ts_data[2 * i]) * 1e-6;
+         ctx->shader_gpu_time_ms[pipeline_names[i]] += elapsed_ms;
++        ctx->shader_gpu_count[pipeline_names[i]]++;
+     }
+ 
+     ctx->profile_timestamp_host_buf.Unmap();
+@@ -3715,6 +3718,20 @@ static ggml_status ggml_backend_webgpu_graph_compute(ggml_backend_t backend, str
+ 
+ #ifdef GGML_WEBGPU_GPU_PROFILE
+     ggml_backend_webgpu_collect_profile_results(ctx, profile_pipeline_names, num_inflight_batches);
++    // the backend is never freed in the browser (wllama exits by terminating its worker), so log the
++    // cumulative per-shader totals every 64 graphs instead of only in the free function
++    if (++ctx->profile_graphs % 64 == 0) {
++        double total_gpu = 0.0;
++        for (const auto & kv : ctx->shader_gpu_time_ms) {
++            total_gpu += kv.second;
++        }
++        GGML_LOG_INFO("ggml_webgpu_prof: graphs %llu total %.3f ms" "\n", (unsigned long long) ctx->profile_graphs,
++                      total_gpu);
++        for (const auto & kv : ctx->shader_gpu_time_ms) {
++            GGML_LOG_INFO("ggml_webgpu_prof: %s %.3f ms %llu" "\n", kv.first.c_str(), kv.second,
++                          (unsigned long long) ctx->shader_gpu_count[kv.first]);
++        }
++    }
+ #endif
+ 
+     if (contains_set_rows) {

@@ -1,0 +1,4 @@
+# build tree (emsdk, wllama/llama.cpp sources) and the isolated test browser (profile with a downloaded model)
+.work/
+# extension signing key (only needed to pack a .crx)
+.keys/
