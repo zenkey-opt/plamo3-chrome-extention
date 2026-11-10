@@ -49,6 +49,21 @@ class TranslateError extends Error {
 // ---------------------------------------------------------------------------
 // Request queue (bounded concurrency, two priorities)
 
+// A worker without events stops after 30 s, and the engine sends none while it loads a model or decodes
+// without streaming. The pages waiting on it would never hear back (their port also reaches the engine
+// document, so it stays open and they never retry), so the worker holds on while work is outstanding.
+let holdTimer = 0;
+function holdWorker() {
+  if (holdTimer) return;
+  holdTimer = setInterval(() => {
+    if (queue.active || queue.pending || rpcPending.size) chrome.runtime.getPlatformInfo().catch(() => {});
+    else {
+      clearInterval(holdTimer);
+      holdTimer = 0;
+    }
+  }, 20000);
+}
+
 class Queue {
   constructor(limit) {
     this.limit = limit;
@@ -61,6 +76,7 @@ class Queue {
     this.pump();
   }
   run(fn, { priority = 'low', signal } = {}) {
+    holdWorker();
     return new Promise((resolve, reject) => {
       (priority === 'high' ? this.high : this.low).push({ fn, resolve, reject, signal });
       this.pump();
@@ -196,6 +212,7 @@ function engineCall(method, params = {}, { onDelta, signal } = {}) {
           reject: (e) => (done(), reject(e)),
         });
         if (onDelta && rid) streams.set(rid, onDelta);
+        holdWorker();
         if (signal) {
           if (signal.aborted) {
             done();
