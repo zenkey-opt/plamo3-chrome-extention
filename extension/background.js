@@ -17,7 +17,7 @@ const settingsReady = getSettings().then((s) => applySettings(s));
 onSettingsChanged(applySettings);
 
 // settings that do not change any translation (the cache survives them)
-const NOT_FOR_CACHE = new Set(['autoPage', 'autoPageSkip']);
+const NOT_FOR_CACHE = new Set(['autoPage', 'autoPageSkip', 'pageGlow']);
 
 function applySettings(s, changes) {
   const prevModel = settings.model;
@@ -671,7 +671,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return { ok: true };
       case 'pageSettings':
         await settingsReady;
-        return { targetLang: settings.targetLang, altTargetLang: settings.altTargetLang, pageMode: settings.pageMode, useTitleContext: settings.useTitleContext };
+        return { targetLang: settings.targetLang, altTargetLang: settings.altTargetLang, pageMode: settings.pageMode, pageGlow: settings.pageGlow, useTitleContext: settings.useTitleContext };
       case 'detectLang':
         return { lang: await detectLang(msg.text || '') };
       case 'openOptions':

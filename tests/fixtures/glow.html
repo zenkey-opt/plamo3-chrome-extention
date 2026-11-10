@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- The glass over paragraphs in flight (置換): a plain white page, a grey box, a dark section, a main column
+     with its own z-index, plus the places that get nothing: a sticky header, a gradient, a box that scrolls. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Notes on machine translation</title>
+  <style>
+    body { margin: 0; font: 16px/1.75 system-ui, sans-serif; color: #1f2328; background: #ffffff; }
+    header { position: sticky; top: 0; z-index: 10; background: #ffffff; border-bottom: 1px solid #d0d7de; padding: 12px 32px; font-weight: 600; }
+    .hero { background: linear-gradient(120deg, #e8f1f8, #f8efe6); padding: 56px 32px; font-size: 20px; }
+    main { position: relative; z-index: 1; max-width: 720px; padding: 24px 32px 400px; }
+    .note { background: #f3f5f7; border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+    .dark { background: #16181b; color: #e3e6ea; border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+    .scroll { height: 52px; overflow: auto; border: 1px solid #d0d7de; border-radius: 8px; padding: 8px 12px; margin: 16px 0; }
+    .ellip { width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 16px 0; color: #0b62a8; }
+    p { margin: 0 0 12px; }
+  </style>
+</head>
+<body>
+  <header><span id="u-header">Daily notes on machine translation</span></header>
+  <div class="hero"><p id="u-hero">Models that read whole sentences at once changed the field.</p></div>
+  <main>
+    <p id="u-p1">Before transformers, most sequence models processed tokens one at a time, which made training slow and long-range dependencies hard to learn. Attention lets every token look at every other token in a single step.</p>
+    <div class="note"><p id="u-note">Multi-head self-attention runs several attention operations in parallel and joins their results.</p></div>
+    <div class="dark"><p id="u-dark">Positional encodings inject information about the order of the tokens into the model.</p></div>
+    <div class="scroll"><p id="u-scroll">This box scrolls by itself. Its text is long enough to need a scroll bar, so the glass, drawn in page coordinates, would not follow it when the box scrolls; it gets no glass at all.</p></div>
+    <div class="ellip" id="u-ellip">A very long navigation label that does not fit into its box at all</div>
+    <p id="u-p2">Feed-forward networks are applied to each position separately and identically, which keeps the computation simple.</p>
+  </main>
+</body>
+</html>

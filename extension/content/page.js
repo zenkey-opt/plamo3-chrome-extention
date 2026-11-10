@@ -529,6 +529,7 @@
         S.waiting.push(unit);
       }
       S.inflight.clear();
+      glow.clear();
       if (S.active) setTimeout(pump, 300);
     });
     S.port = port;
@@ -597,6 +598,7 @@
         setTimeout(pump, 300);
         return;
       }
+      glow.add(unit);
     }
     ui.update();
   }
@@ -623,6 +625,8 @@
         S.paused = msg;
       }
     }
+    glow.remove(unit);
+    if (glow.size) glow.placeAll();
     pump();
     ui.update();
   }
@@ -714,6 +718,7 @@
     const base = S.target === 'ja(easy)' ? 'ja' : S.target;
     if (pageLang && pageLang === base) S.target = S.altTarget;
     S.context = cfg.useTitleContext ? document.title.trim().slice(0, 160) : '';
+    glow.setEnabled(cfg.pageGlow !== false);
     S.active = true;
     S.paused = null;
     S.done = S.failed = 0;
@@ -747,6 +752,7 @@
     S.waiting = [];
     S.inflight.clear();
     S.anchorUnits.clear();
+    glow.detach();
     ui.hide();
     notify();
   }
@@ -759,6 +765,10 @@
       for (let i = S.units.length - 1; i >= 0; i--) if (S.units[i].applied) restore(S.units[i]);
       for (const u of S.units) if (u.state === 'done') apply(u);
     });
+    if (S.mode === 'replace') {
+      glow.sync();
+      glow.placeAll();
+    } else glow.clear();
     ui.update();
   }
 
@@ -787,6 +797,323 @@
     for (const u of S.units) if (u.fallback && u.applied) fallback++;
     return { total, visibleTotal, done: S.done, failed: S.failed, fallback, busy: S.inflight.size + S.waiting.length };
   }
+
+  // ---------------------------------------------------------------- glass over the units in flight (置換 only)
+  // Drawn in a shadow root of its own, in page coordinates, so it scrolls with the text at no cost.
+  // The glass is only a blur with faded edges: a plain background stays exactly as it is and the letters
+  // look frosted. The light is a brightness/contrast pair whose fixed point is the colour behind the text,
+  // so it brightens the letters and leaves the background alone. One light crosses the area of the visible
+  // paragraphs in flight, each showing a slice of it. Text on an image or a gradient, in a box that scrolls
+  // on its own or in a fixed/sticky part gets nothing.
+  const glow = (() => {
+    const PERIOD = 2600; // one pass of the light and a short rest
+    const LEAN = Math.tan((22 * Math.PI) / 180);
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+    const range = document.createRange();
+    const live = new Map(); // unit -> { fx, el, clips, layer, band, box, lit }
+    let enabled = true;
+    let host = null;
+    let root = null;
+    let origin = null; // 0x0 probe at the origin of the page coordinates
+    let span = null; // the area the light crosses, page coordinates
+    let tick = 0;
+    let raf = 0;
+    let queued = 0;
+    let settle = 0;
+    let lastPlace = 0;
+    const css = `
+      :host { all: initial; }
+      .o { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+      .fx { position: absolute; z-index: 2147483646; pointer-events: none; }
+      .pane { position: absolute; inset: 0; backdrop-filter: blur(2.5px);
+        mask-image: linear-gradient(90deg, transparent, #000 10px, #000 calc(100% - 10px), transparent),
+          linear-gradient(transparent, #000 6px, #000 calc(100% - 6px), transparent);
+        mask-composite: intersect; }
+      /* the text box; a plain clip: a mask or opacity here would cut the light off from the page */
+      .clip { position: absolute; overflow: hidden; }
+      .layer { position: absolute; left: 0; top: 0; }
+      .band { position: absolute; top: -10%; height: 120%; left: 0; width: 180px; transform-origin: 0 0;
+        backdrop-filter: var(--light); mask-image: linear-gradient(90deg, transparent, #000 50%, transparent); }
+      /* fade the filtered elements themselves: a fading ancestor would become their backdrop root */
+      .pane, .band { opacity: 0; transition: opacity 180ms cubic-bezier(.22, 1, .36, 1); }
+      .fx.on .pane, .fx.on .band { opacity: 1; }
+      .fx.out .pane, .fx.out .band { opacity: 0; transition-duration: 380ms; }`;
+
+    const rgba = (s) => {
+      if (!/^rgba?\(/.test(s || '')) return null; // oklch(), color(): unknown, no glass
+      const m = s.match(/[\d.]+/g);
+      return m && m.length >= 3 ? [+m[0], +m[1], +m[2], m.length > 3 ? +m[3] : 1] : null;
+    };
+    const up = (n) => n.parentElement || (n.getRootNode?.() instanceof ShadowRoot ? n.getRootNode().host : null);
+
+    // the colour the text sits on, walking up; null where the glass could show a seam or lose the text
+    function lookOf(el) {
+      const layers = [];
+      const clips = [];
+      let base = null;
+      for (let n = el; n; n = up(n)) {
+        const cs = getComputedStyle(n);
+        if (cs.position === 'fixed' || cs.position === 'sticky') return null;
+        if (!base) {
+          if (cs.backgroundImage !== 'none') return null;
+          const c = rgba(cs.backgroundColor);
+          if (!c) return null;
+          if (c[3] >= 0.99) base = c;
+          else if (c[3] > 0) layers.push(c);
+        }
+        if (n !== document.documentElement && n !== document.body && (cs.overflowX !== 'visible' || cs.overflowY !== 'visible')) {
+          // a box that scrolls by itself would move the text away from the glass
+          if (/auto|scroll/.test(cs.overflowX + cs.overflowY) && (n.scrollHeight > n.clientHeight + 1 || n.scrollWidth > n.clientWidth + 1)) return null;
+          clips.push(n);
+        }
+      }
+      if (!base) base = /dark/.test(getComputedStyle(document.documentElement).colorScheme) && matchMedia('(prefers-color-scheme: dark)').matches ? [18, 18, 18, 1] : [255, 255, 255, 1];
+      for (let i = layers.length - 1; i >= 0; i--) {
+        const [r, g, b, a] = layers[i];
+        base = [base[0] * (1 - a) + r * a, base[1] * (1 - a) + g * a, base[2] * (1 - a) + b * a, 1];
+      }
+      const ink = rgba(getComputedStyle(el).color);
+      return ink ? { light: lightFor(base, ink), clips } : null;
+    }
+
+    function lightFor(bg, ink) {
+      const L = (bg[0] + bg[1] + bg[2]) / 765;
+      if ((ink[0] + ink[1] + ink[2]) / 765 < L) {
+        // dark letters: lower the contrast toward the background, then brightness brings the background back
+        const c = 0.45;
+        return `contrast(${c}) brightness(${Math.min(3, L / ((L - 0.5) * c + 0.5)).toFixed(3)})`;
+      }
+      // light letters: a gain of 1.4 around the background colour (a larger gain spreads a tinted background)
+      const c = 1 + 2 * L * 0.4;
+      return `brightness(${(1.4 / c).toFixed(3)}) contrast(${c.toFixed(3)})`;
+    }
+
+    function ensureHost() {
+      if (host?.isConnected) return;
+      host = document.createElement('plamo-fx');
+      ownNodes.add(host);
+      root = host.attachShadow({ mode: 'open' });
+      root.innerHTML = `<style>${css}</style><div class="o"></div>`;
+      origin = root.querySelector('.o');
+      document.documentElement.appendChild(host);
+    }
+
+    // what covers the text at a point (a fixed header, a cookie bar), if anything
+    function cover(el, x, y) {
+      if (y < 1 || y > innerHeight - 1) return null;
+      const hit = document.elementFromPoint(x, y);
+      if (!hit || ownNodes.has(hit) || el.contains(hit)) return null;
+      for (let n = el; n; n = up(n)) if (n === hit) return null;
+      return hit;
+    }
+
+    // where the glass goes, in page coordinates (reads only); null: nowhere
+    function measure(unit, g, o) {
+      try {
+        range.setStartBefore(unit.nodes[0]);
+        range.setEndAfter(unit.nodes[unit.nodes.length - 1]);
+      } catch {
+        return null;
+      }
+      let { left, right, top, bottom } = range.getBoundingClientRect();
+      // the glass reaches past the text by its faded edge, except where something cuts the text off
+      const m = { l: 10, r: 10, t: 6, b: 6 };
+      for (const c of g.clips) {
+        // stay inside every box that clips the text (an ellipsis, a carousel)
+        const r = c.getBoundingClientRect();
+        if (r.left > left) [left, m.l] = [r.left, 0];
+        if (r.right < right) [right, m.r] = [r.right, 0];
+        if (r.top > top) [top, m.t] = [r.top, 0];
+        if (r.bottom < bottom) [bottom, m.b] = [r.bottom, 0];
+      }
+      if (right - left < 2 || bottom - top < 2) return null;
+      const x = Math.min(innerWidth - 2, Math.max(1, (left + right) / 2));
+      if (cover(g.el, x, (top + bottom) / 2)) return null;
+      const t = cover(g.el, x, top + 3)?.getBoundingClientRect().bottom;
+      if (t > top) [top, m.t] = [t, 0];
+      const d = cover(g.el, x, bottom - 3)?.getBoundingClientRect().top;
+      if (d < bottom) [bottom, m.b] = [d, 0];
+      if (bottom - top < 2) return null;
+      // never past the document's own scroll size: the glass must not add a scroll bar
+      const de = document.documentElement;
+      const bx = Math.max(0, left - o.left - m.l);
+      const by = Math.max(0, top - o.top - m.t);
+      const w = Math.min(right - o.left + m.r, de.scrollWidth) - bx;
+      const h = Math.min(bottom - o.top + m.b, de.scrollHeight) - by;
+      if (w < 2 || h < 2) return null;
+      return { x: bx, y: by, w, h, m: { l: left - o.left - bx, t: top - o.top - by, r: Math.max(0, bx + w - (right - o.left)), b: Math.max(0, by + h - (bottom - o.top)) }, seen: bottom > 0 && top < innerHeight };
+    }
+
+    function placeAll() {
+      lastPlace = performance.now();
+      if (!live.size || !origin) return;
+      const o = origin.getBoundingClientRect();
+      const boxes = [];
+      let x0 = Infinity;
+      let y0 = Infinity;
+      let x1 = -Infinity;
+      let y1 = -Infinity;
+      for (const [u, g] of live) {
+        const b = measure(u, g, o);
+        boxes.push([g, b]);
+        if (!b?.seen) continue;
+        x0 = Math.min(x0, b.x + b.m.l);
+        y0 = Math.min(y0, b.y + b.m.t);
+        x1 = Math.max(x1, b.x + b.w - b.m.r);
+        y1 = Math.max(y1, b.y + b.h - b.m.b);
+      }
+      // a small change keeps the running light; a new area restarts it in the same phase
+      let moved = false;
+      if (x1 > x0) {
+        const next = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+        moved = !span || ['x', 'y', 'w', 'h'].some((k) => Math.abs(next[k] - span[k]) > 24);
+        if (moved) span = next;
+      }
+      for (const [g, b] of boxes) {
+        g.box = b;
+        if (!b) {
+          g.fx.style.display = 'none';
+          continue;
+        }
+        Object.assign(g.fx.style, { display: '', left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px` });
+        if (!g.band || !span) continue;
+        g.layer.parentNode.style.inset = `${b.m.t}px ${b.m.r}px ${b.m.b}px ${b.m.l}px`;
+        g.layer.style.cssText = `left:${span.x - b.x - b.m.l}px;top:${span.y - b.y - b.m.t}px;width:${span.w}px;height:${span.h}px`;
+        if (moved || !g.lit) animateBand(g);
+      }
+    }
+
+    function animateBand(g) {
+      g.lit = true;
+      g.band.getAnimations().forEach((a) => a.cancel());
+      const end = span.w + LEAN * span.h * 1.2 + 10;
+      const a = g.band.animate([
+        { transform: 'translateX(-190px) skewX(-22deg)', easing: 'cubic-bezier(.45, 0, .25, 1)' },
+        { transform: `translateX(${end}px) skewX(-22deg)`, offset: 0.7 },
+        { transform: `translateX(${end}px) skewX(-22deg)` },
+      ], { duration: PERIOD, iterations: Infinity });
+      a.startTime = 0; // one phase for every paragraph
+    }
+
+    // one placement per frame however many units change
+    function queue() {
+      if (!queued) {
+        queued = requestAnimationFrame(() => {
+          queued = 0;
+          placeAll();
+        });
+      }
+    }
+
+    function onScroll() {
+      // the glass scrolls with the page by itself; fixed parts and boxes that scroll need a new look
+      if (!raf && performance.now() - lastPlace > 100) {
+        raf = requestAnimationFrame(() => {
+          raf = 0;
+          placeAll();
+        });
+      }
+      clearTimeout(settle);
+      settle = setTimeout(placeAll, 120);
+    }
+
+    function arm() {
+      if (tick) return;
+      addEventListener('scroll', onScroll, { capture: true, passive: true });
+      addEventListener('resize', queue, { passive: true });
+      tick = setInterval(placeAll, 500); // the page may move the text by itself (images, ads)
+    }
+
+    function disarm() {
+      removeEventListener('scroll', onScroll, { capture: true });
+      removeEventListener('resize', queue);
+      clearInterval(tick);
+      clearTimeout(settle);
+      cancelAnimationFrame(raf);
+      cancelAnimationFrame(queued);
+      tick = raf = queued = 0;
+      span = null;
+    }
+
+    function add(unit) {
+      if (!enabled || !S.active || S.mode !== 'replace' || live.has(unit)) return;
+      const el = unit.parent.nodeType === Node.ELEMENT_NODE ? unit.parent : unit.parent.host;
+      if (!el?.isConnected) return;
+      let look = null;
+      try {
+        look = lookOf(el);
+      } catch {}
+      if (!look) return;
+      ensureHost();
+      const fx = root.appendChild(document.createElement('div'));
+      fx.className = 'fx';
+      fx.style.display = 'none';
+      fx.style.setProperty('--light', look.light);
+      fx.appendChild(document.createElement('div')).className = 'pane';
+      const g = { fx, el, clips: look.clips, layer: null, band: null, box: null, lit: false };
+      if (!reduce.matches) {
+        const clip = fx.appendChild(document.createElement('div'));
+        clip.className = 'clip';
+        g.layer = clip.appendChild(document.createElement('div'));
+        g.layer.className = 'layer';
+        g.band = g.layer.appendChild(document.createElement('div'));
+        g.band.className = 'band';
+      }
+      live.set(unit, g);
+      queue();
+      // placed in the next frame, faded in the one after; a result from the cache may come first
+      requestAnimationFrame(() => requestAnimationFrame(() => live.get(unit) === g && fx.classList.add('on')));
+      arm();
+    }
+
+    function remove(unit, fade = true) {
+      const g = live.get(unit);
+      if (!g) return;
+      live.delete(unit);
+      const kill = () => {
+        g.band?.getAnimations().forEach((a) => a.cancel());
+        g.fx.remove();
+      };
+      if (fade && g.fx.classList.contains('on') && g.box) {
+        g.fx.classList.replace('on', 'out');
+        setTimeout(kill, 420);
+      } else kill();
+      if (!live.size) disarm();
+    }
+
+    function clear() {
+      for (const u of [...live.keys()]) remove(u, false);
+    }
+
+    function sync() {
+      for (const u of S.inflight.values()) add(u);
+    }
+
+    function setEnabled(v) {
+      enabled = v;
+      if (v) sync();
+      else clear();
+    }
+
+    function detach() {
+      clear();
+      host?.remove();
+      host = root = origin = null;
+    }
+
+    reduce.addEventListener('change', () => {
+      const units = [...live.keys()];
+      clear();
+      units.forEach(add);
+    });
+
+    return { add, remove, clear, sync, setEnabled, detach, placeAll, get size() { return live.size; } };
+  })();
+
+  // the setting can change while a page is being translated
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.pageGlow) glow.setEnabled(changes.pageGlow.newValue !== false);
+  });
 
   // ---------------------------------------------------------------- floating status pill
   const ui = (() => {
@@ -1002,4 +1329,5 @@
   api.setMode = setMode;
   api.state = S;
   api.stats = stats;
+  api.glow = glow;
 })();

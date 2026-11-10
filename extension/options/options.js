@@ -35,6 +35,7 @@ async function init() {
   $('#concurrency').value = settings.concurrency;
   fillIdle();
   $('#useTitleContext').checked = !!settings.useTitleContext;
+  $('#pageGlow').checked = settings.pageGlow !== false;
   $('#glossary').value = settings.glossary;
   setSeg('#form', settings.form);
   setSeg('#pageMode', settings.pageMode);
@@ -46,6 +47,7 @@ async function init() {
   $('#targetLang').addEventListener('change', (e) => save({ targetLang: e.target.value }));
   $('#altTargetLang').addEventListener('change', (e) => save({ altTargetLang: e.target.value }));
   $('#useTitleContext').addEventListener('change', (e) => save({ useTitleContext: e.target.checked }));
+  $('#pageGlow').addEventListener('change', (e) => save({ pageGlow: e.target.checked }));
   $('#concurrency').addEventListener('change', (e) => {
     const n = Math.max(1, Math.min(8, Math.round(Number(e.target.value) || DEFAULTS.concurrency)));
     e.target.value = n;

@@ -32,6 +32,9 @@ code { font-family: var(--mono); font-size: 0.92em; padding: 1px 4px; border-rad
 .hint.warn { color: var(--warn); display: flex; align-items: center; gap: 12px; }
 .field[hidden], .hint[hidden] { display: none; }
 .check { display: flex; gap: 8px; align-items: center; margin-top: 12px; cursor: pointer; }
+/* a check under a field's control belongs to it: close to the control, farther from the next field */
+.field > .check { margin-top: 4px; }
+.field:has(> .check) + .field { margin-top: 16px; }
 .check input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
 .seg { width: fit-content; }
 .statusgrid { display: grid; grid-template-columns: 136px 1fr; gap: 8px 16px; font-size: 13px; align-items: baseline; }
