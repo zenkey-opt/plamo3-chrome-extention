@@ -800,22 +800,23 @@
 
   // ---------------------------------------------------------------- glass over the units in flight (置換 only)
   // Drawn in a shadow root of its own, in page coordinates, so it scrolls with the text at no cost.
-  // The glass is only a blur with faded edges: a plain background stays exactly as it is and the letters
-  // look frosted. The light is a brightness/contrast pair whose fixed point is the colour behind the text,
-  // so it brightens the letters and leaves the background alone. One light crosses the area of the visible
-  // paragraphs in flight, each showing a slice of it. Text on an image or a gradient, in a box that scrolls
-  // on its own or in a fixed/sticky part gets nothing.
+  // The glass is only a blur with faded edges, shaped to the lines of text a reader sees: a plain background
+  // stays exactly as it is, the letters look frosted, and an image beside the first lines stays sharp.
+  // The light is a brightness/contrast pair whose fixed point is the colour behind the text, so it brightens
+  // the letters and leaves the background alone. Text on an image or a gradient, in a box that scrolls on
+  // its own or in a fixed/sticky part gets nothing.
   const glow = (() => {
     const PERIOD = 2600; // one pass of the light and a short rest
     const LEAN = Math.tan((22 * Math.PI) / 180);
+    const BAND = 180; // width of a light band
+    const SPACING = 1100; // the light is a row of parallel bands this far apart, fixed to the page
     const reduce = matchMedia('(prefers-reduced-motion: reduce)');
     const range = document.createRange();
-    const live = new Map(); // unit -> { fx, el, clips, layer, band, box, lit }
+    const live = new Map(); // unit -> { fx, pane, el, clips, lights, box }
     let enabled = true;
     let host = null;
     let root = null;
     let origin = null; // 0x0 probe at the origin of the page coordinates
-    let span = null; // the area the light crosses, page coordinates
     let tick = 0;
     let raf = 0;
     let queued = 0;
@@ -829,10 +830,9 @@
         mask-image: linear-gradient(90deg, transparent, #000 10px, #000 calc(100% - 10px), transparent),
           linear-gradient(transparent, #000 6px, #000 calc(100% - 6px), transparent);
         mask-composite: intersect; }
-      /* the text box; a plain clip: a mask or opacity here would cut the light off from the page */
-      .clip { position: absolute; overflow: hidden; }
-      .layer { position: absolute; left: 0; top: 0; }
-      .band { position: absolute; top: -10%; height: 120%; left: 0; width: 180px; transform-origin: 0 0;
+      /* one per run of lines; a plain clip: a mask or opacity here would cut the light off from the page */
+      .lit { position: absolute; overflow: hidden; }
+      .band { position: absolute; top: 0; left: 0; height: 100%; width: ${BAND}px; transform-origin: 0 0;
         backdrop-filter: var(--light); mask-image: linear-gradient(90deg, transparent, #000 50%, transparent); }
       /* fade the filtered elements themselves: a fading ancestor would become their backdrop root */
       .pane, .band { opacity: 0; transition: opacity 180ms cubic-bezier(.22, 1, .36, 1); }
@@ -900,11 +900,45 @@
 
     // what covers the text at a point (a fixed header, a cookie bar), if anything
     function cover(el, x, y) {
-      if (y < 1 || y > innerHeight - 1) return null;
+      if (y < 1 || y > innerHeight - 1 || x < 1 || x > innerWidth - 1) return null;
       const hit = document.elementFromPoint(x, y);
       if (!hit || ownNodes.has(hit) || el.contains(hit)) return null;
       for (let n = el; n; n = up(n)) if (n === hit) return null;
       return hit;
+    }
+
+    // The lines a reader sees, in runs with the same ends. Labels moved off the page or shrunk to 1 px for
+    // screen readers do not count (Wikipedia's "Jump up to:" sits 99999 px above the page). A float beside
+    // some lines starts a new run, so the glass keeps off it; a short last line stays in its run.
+    function runsOf(o) {
+      const de = document.documentElement;
+      const endX = o.left + de.scrollWidth;
+      const endY = o.top + de.scrollHeight;
+      const rects = [...range.getClientRects()]
+        .filter((r) => r.width >= 2 && r.height >= 2 && r.right > o.left && r.bottom > o.top && r.left < endX && r.top < endY)
+        .sort((p, q) => p.top - q.top);
+      const lines = [];
+      for (const r of rects) {
+        const l = lines[lines.length - 1];
+        if (l && r.top < l.bottom - Math.min(r.height, l.bottom - l.top) * 0.3) {
+          l.left = Math.min(l.left, r.left);
+          l.right = Math.max(l.right, r.right);
+          l.bottom = Math.max(l.bottom, r.bottom);
+        } else lines.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+      }
+      const runs = [];
+      lines.forEach((l, i) => {
+        const run = runs[runs.length - 1];
+        const lastShorter = run && i === lines.length - 1 && l.right <= run.end;
+        if (run && Math.abs(l.left - run.start) <= 24 && (Math.abs(l.right - run.end) <= 120 || lastShorter)) {
+          run.left = Math.min(run.left, l.left);
+          run.right = Math.max(run.right, l.right);
+          run.bottom = Math.max(run.bottom, l.bottom);
+          run.start = l.left;
+          run.end = l.right;
+        } else runs.push({ left: l.left, right: l.right, top: l.top, bottom: l.bottom, start: l.left, end: l.right });
+      });
+      return runs;
     }
 
     // where the glass goes, in page coordinates (reads only); null: nowhere
@@ -915,7 +949,12 @@
       } catch {
         return null;
       }
-      let { left, right, top, bottom } = range.getBoundingClientRect();
+      const runs = runsOf(o);
+      if (!runs.length) return null;
+      let left = Math.min(...runs.map((r) => r.left));
+      let right = Math.max(...runs.map((r) => r.right));
+      let top = runs[0].top;
+      let bottom = Math.max(...runs.map((r) => r.bottom));
       // the glass reaches past the text by its faded edge, except where something cuts the text off
       const m = { l: 10, r: 10, t: 6, b: 6 };
       for (const c of g.clips) {
@@ -927,11 +966,14 @@
         if (r.bottom < bottom) [bottom, m.b] = [r.bottom, 0];
       }
       if (right - left < 2 || bottom - top < 2) return null;
-      const x = Math.min(innerWidth - 2, Math.max(1, (left + right) / 2));
-      if (cover(g.el, x, (top + bottom) / 2)) return null;
-      const t = cover(g.el, x, top + 3)?.getBoundingClientRect().bottom;
+      const mid = (r) => Math.min(Math.max((Math.max(r.left, left) + Math.min(r.right, right)) / 2, left + 1), right - 1);
+      const big = runs.reduce((p, q) => ((q.right - q.left) * (q.bottom - q.top) > (p.right - p.left) * (p.bottom - p.top) ? q : p));
+      if (cover(g.el, mid(big), (Math.max(big.top, top) + Math.min(big.bottom, bottom)) / 2)) return null;
+      const first = runs[0];
+      const last = runs[runs.length - 1];
+      const t = cover(g.el, mid(first), top + 3)?.getBoundingClientRect().bottom;
       if (t > top) [top, m.t] = [t, 0];
-      const d = cover(g.el, x, bottom - 3)?.getBoundingClientRect().top;
+      const d = cover(g.el, mid(last), bottom - 3)?.getBoundingClientRect().top;
       if (d < bottom) [bottom, m.b] = [d, 0];
       if (bottom - top < 2) return null;
       // never past the document's own scroll size: the glass must not add a scroll bar
@@ -941,7 +983,30 @@
       const w = Math.min(right - o.left + m.r, de.scrollWidth) - bx;
       const h = Math.min(bottom - o.top + m.b, de.scrollHeight) - by;
       if (w < 2 || h < 2) return null;
-      return { x: bx, y: by, w, h, m: { l: left - o.left - bx, t: top - o.top - by, r: Math.max(0, bx + w - (right - o.left)), b: Math.max(0, by + h - (bottom - o.top)) }, seen: bottom > 0 && top < innerHeight };
+      const cut = runs
+        .map((r) => ({ left: Math.max(r.left, left), right: Math.min(r.right, right), top: Math.max(r.top, top), bottom: Math.min(r.bottom, bottom) }))
+        .filter((r) => r.right - r.left >= 2 && r.bottom - r.top >= 2);
+      if (!cut.length) return null;
+      // the runs in the glass's own coordinates, stacked without gaps
+      const X = (v) => v - o.left - bx;
+      const Y = (v) => v - o.top - by;
+      const edges = [Y(cut[0].top)];
+      for (let i = 1; i < cut.length; i++) edges.push(Y((cut[i - 1].bottom + cut[i].top) / 2));
+      edges.push(Y(cut[cut.length - 1].bottom));
+      const lights = cut.map((r, i) => ({ x: X(r.left), y: edges[i], w: r.right - r.left, h: edges[i + 1] - edges[i] }));
+      // the blur's outline: 10 px beside each run (the box's own margin where the run reaches its edge)
+      const ys = [0, ...edges.slice(1, -1), h];
+      const fit = (v, max) => Math.min(max, Math.max(0, v));
+      const pts = [];
+      cut.forEach((r, i) => {
+        const x = fit(X(r.right) + (r.right >= right - 0.5 ? m.r : 10), w);
+        pts.push([x, ys[i]], [x, ys[i + 1]]);
+      });
+      for (let i = cut.length - 1; i >= 0; i--) {
+        const x = fit(X(cut[i].left) - (cut[i].left <= left + 0.5 ? m.l : 10), w);
+        pts.push([x, ys[i + 1]], [x, ys[i]]);
+      }
+      return { x: bx, y: by, w, h, pts, lights };
     }
 
     function placeAll() {
@@ -949,26 +1014,7 @@
       if (!live.size || !origin) return;
       const o = origin.getBoundingClientRect();
       const boxes = [];
-      let x0 = Infinity;
-      let y0 = Infinity;
-      let x1 = -Infinity;
-      let y1 = -Infinity;
-      for (const [u, g] of live) {
-        const b = measure(u, g, o);
-        boxes.push([g, b]);
-        if (!b?.seen) continue;
-        x0 = Math.min(x0, b.x + b.m.l);
-        y0 = Math.min(y0, b.y + b.m.t);
-        x1 = Math.max(x1, b.x + b.w - b.m.r);
-        y1 = Math.max(y1, b.y + b.h - b.m.b);
-      }
-      // a small change keeps the running light; a new area restarts it in the same phase
-      let moved = false;
-      if (x1 > x0) {
-        const next = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-        moved = !span || ['x', 'y', 'w', 'h'].some((k) => Math.abs(next[k] - span[k]) > 24);
-        if (moved) span = next;
-      }
+      for (const [u, g] of live) boxes.push([g, measure(u, g, o)]);
       for (const [g, b] of boxes) {
         g.box = b;
         if (!b) {
@@ -976,23 +1022,50 @@
           continue;
         }
         Object.assign(g.fx.style, { display: '', left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px` });
-        if (!g.band || !span) continue;
-        g.layer.parentNode.style.inset = `${b.m.t}px ${b.m.r}px ${b.m.b}px ${b.m.l}px`;
-        g.layer.style.cssText = `left:${span.x - b.x - b.m.l}px;top:${span.y - b.y - b.m.t}px;width:${span.w}px;height:${span.h}px`;
-        if (moved || !g.lit) animateBand(g);
+        g.pane.style.clipPath = `polygon(${b.pts.map(([x, y]) => `${x.toFixed(1)}px ${y.toFixed(1)}px`).join(', ')})`;
+        if (!reduce.matches) light(g, b);
       }
     }
 
-    function animateBand(g) {
-      g.lit = true;
-      g.band.getAnimations().forEach((a) => a.cancel());
-      const end = span.w + LEAN * span.h * 1.2 + 10;
-      const a = g.band.animate([
-        { transform: 'translateX(-190px) skewX(-22deg)', easing: 'cubic-bezier(.45, 0, .25, 1)' },
-        { transform: `translateX(${end}px) skewX(-22deg)`, offset: 0.7 },
-        { transform: `translateX(${end}px) skewX(-22deg)` },
-      ], { duration: PERIOD, iterations: Infinity });
-      a.startTime = 0; // one phase for every paragraph
+    // The light is a row of parallel bands SPACING apart, fixed to the page and moving one SPACING per
+    // pass: every paragraph shows its slice of the same light, and nothing jumps when the page scrolls or
+    // paragraphs come and go. A run's bands are set again only when the run itself moves.
+    function light(g, b) {
+      while (g.lights.length > b.lights.length) g.lights.pop().el.remove();
+      while (g.lights.length < b.lights.length) {
+        const el = g.fx.appendChild(document.createElement('div'));
+        el.className = 'lit';
+        g.lights.push({ el, key: '', bands: [] });
+      }
+      b.lights.forEach((r, i) => {
+        const l = g.lights[i];
+        Object.assign(l.el.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
+        const px = b.x + r.x;
+        const py = b.y + r.y;
+        const key = [px, py, r.w, r.h].map(Math.round).join();
+        if (key === l.key) return;
+        l.key = key;
+        // band k's left edge at the run's top starts at off + k * SPACING; the bands that cross the run
+        const off = (((-LEAN * py - px) % SPACING) + SPACING) % SPACING;
+        const from = Math.floor((-BAND - off) / SPACING);
+        const n = Math.ceil((r.w + LEAN * r.h - off) / SPACING) - from;
+        while (l.bands.length > n) l.bands.pop().remove();
+        while (l.bands.length < n) {
+          const band = l.el.appendChild(document.createElement('div'));
+          band.className = 'band';
+          l.bands.push(band);
+        }
+        l.bands.forEach((band, j) => {
+          const x = off + (from + j) * SPACING;
+          band.getAnimations().forEach((a) => a.cancel());
+          const a = band.animate([
+            { transform: `translateX(${x}px) skewX(-22deg)`, easing: 'cubic-bezier(.45, 0, .25, 1)' },
+            { transform: `translateX(${x + SPACING}px) skewX(-22deg)`, offset: 0.7 },
+            { transform: `translateX(${x + SPACING}px) skewX(-22deg)` },
+          ], { duration: PERIOD, iterations: Infinity });
+          a.startTime = 0; // one phase for the whole page
+        });
+      });
     }
 
     // one placement per frame however many units change
@@ -1032,7 +1105,6 @@
       cancelAnimationFrame(raf);
       cancelAnimationFrame(queued);
       tick = raf = queued = 0;
-      span = null;
     }
 
     function add(unit) {
@@ -1049,16 +1121,9 @@
       fx.className = 'fx';
       fx.style.display = 'none';
       fx.style.setProperty('--light', look.light);
-      fx.appendChild(document.createElement('div')).className = 'pane';
-      const g = { fx, el, clips: look.clips, layer: null, band: null, box: null, lit: false };
-      if (!reduce.matches) {
-        const clip = fx.appendChild(document.createElement('div'));
-        clip.className = 'clip';
-        g.layer = clip.appendChild(document.createElement('div'));
-        g.layer.className = 'layer';
-        g.band = g.layer.appendChild(document.createElement('div'));
-        g.band.className = 'band';
-      }
+      const pane = fx.appendChild(document.createElement('div'));
+      pane.className = 'pane';
+      const g = { fx, pane, el, clips: look.clips, lights: [], box: null };
       live.set(unit, g);
       queue();
       // placed in the next frame, faded in the one after; a result from the cache may come first
@@ -1071,7 +1136,7 @@
       if (!g) return;
       live.delete(unit);
       const kill = () => {
-        g.band?.getAnimations().forEach((a) => a.cancel());
+        for (const l of g.lights) for (const band of l.bands) band.getAnimations().forEach((a) => a.cancel());
         g.fx.remove();
       };
       if (fade && g.fx.classList.contains('on') && g.box) {

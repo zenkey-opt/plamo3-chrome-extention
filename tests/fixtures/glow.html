@@ -1,10 +1,12 @@
 <!doctype html>
 <!-- The glass over paragraphs in flight (置換): a plain white page, a grey box, a dark section, a main column
-     with its own z-index, plus the places that get nothing: a sticky header, a gradient, a box that scrolls. -->
+     with its own z-index, a label moved off the page, a float the text wraps around, plus the places that get
+     nothing: a sticky header, a gradient, a box that scrolls. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>Notes on machine translation</title>
+  <link rel="icon" href="data:," />
   <style>
     body { margin: 0; font: 16px/1.75 system-ui, sans-serif; color: #1f2328; background: #ffffff; }
     header { position: sticky; top: 0; z-index: 10; background: #ffffff; border-bottom: 1px solid #d0d7de; padding: 12px 32px; font-weight: 600; }
@@ -15,6 +17,9 @@
     .scroll { height: 52px; overflow: auto; border: 1px solid #d0d7de; border-radius: 8px; padding: 8px 12px; margin: 16px 0; }
     .ellip { width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 16px 0; color: #0b62a8; }
     p { margin: 0 0 12px; }
+    /* Wikipedia's "Jump up to:" in reference lists: moved 99999 px above the page for screen readers */
+    .sr { position: absolute; top: -99999px; clip: rect(1px, 1px, 1px, 1px); width: 1px; height: 1px; overflow: hidden; }
+    .fig { float: right; width: 180px; height: 120px; margin: 4px 0 8px 16px; background: repeating-linear-gradient(45deg, #c0392b 0 6px, #2c6fbb 6px 12px); }
   </style>
 </head>
 <body>
@@ -22,6 +27,9 @@
   <div class="hero"><p id="u-hero">Models that read whole sentences at once changed the field.</p></div>
   <main>
     <p id="u-p1">Before transformers, most sequence models processed tokens one at a time, which made training slow and long-range dependencies hard to learn. Attention lets every token look at every other token in a single step.</p>
+    <p id="u-label"><span class="sr">Jump up to:</span> Attention weights come from queries and keys, scaled by the square root of the key size and normalised with a softmax.</p>
+    <div class="fig" id="fig"></div>
+    <p id="u-wrap">Layer normalisation keeps the activations in a stable range. It is applied before or after each sub-layer, and the choice changes how deep a model can be trained without warm-up. Residual connections carry the input of each sub-layer around it, so gradients reach the early layers directly. Dropout on the attention weights and on the outputs of each sub-layer regularises the model while it trains.</p>
     <div class="note"><p id="u-note">Multi-head self-attention runs several attention operations in parallel and joins their results.</p></div>
     <div class="dark"><p id="u-dark">Positional encodings inject information about the order of the tokens into the model.</p></div>
     <div class="scroll"><p id="u-scroll">This box scrolls by itself. Its text is long enough to need a scroll bar, so the glass, drawn in page coordinates, would not follow it when the box scrolls; it gets no glass at all.</p></div>

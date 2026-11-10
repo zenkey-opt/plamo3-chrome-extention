@@ -2,7 +2,8 @@
 A: glass with the light, B: the light hidden, C: no glass. Flat = pixels whose 21x21 neighbourhood in C is one
 colour (background away from text). Prints JSON: the largest change on flat pixels from the glass (B vs C) and
 from the light (A vs B), and how many pixels off the flat area the light changed by more than 12 levels.
-python glow_pixels.py <dir with A.png B.png C.png>
+python glow_pixels.py <dir with A.png B.png C.png> [x0,y0,x1,y1]
+With a region (a float beside the text), also the largest change inside it from the glass and the light (A vs C).
 """
 import json
 import sys
@@ -33,5 +34,11 @@ def stats(diff, mask):
 g_max, g_over, _ = stats(maxdiff(b, c), flat)
 l_max, l_over, _ = stats(maxdiff(a, b), flat)
 _, _, t_hist = stats(maxdiff(a, b), off)
+region_max = None
+if len(sys.argv) > 2:
+    x0, y0, x1, y1 = (int(v) for v in sys.argv[2].split(','))
+    box = (max(0, x0 + 1), max(0, y0 + 1), min(c.width, x1 - 1), min(c.height, y1 - 1))
+    if box[2] > box[0] and box[3] > box[1]:
+        region_max = max(maxdiff(a, c).crop(box).getextrema())
 print(json.dumps({'flatPx': flat.histogram()[255], 'glassMax': g_max, 'glassOver1': g_over,
-                  'lightMax': l_max, 'lightOver1': l_over, 'textChanged': sum(t_hist[13:])}))
+                  'lightMax': l_max, 'lightOver1': l_over, 'textChanged': sum(t_hist[13:]), 'regionMax': region_max}))
