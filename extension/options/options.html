@@ -12,7 +12,6 @@
       <span class="logo big">訳</span>
       <div>
         <h1>PLaMo 3 Translate Local</h1>
-        <p class="sub">PFN の翻訳特化 LLM「PLaMo 3 Translate」を、ブラウザの中（WebGPU）で動かして翻訳します。サーバーは不要で、訳文も原文も外部に送信しません。</p>
         <p class="byline">非公式の拡張機能 · Built with PLaMo</p>
       </div>
     </header>
@@ -37,7 +36,7 @@
         <p id="consentText">モデルは Preferred Networks が PLaMo コミュニティライセンス契約で公開しています。ダウンロードして使うと、この契約が適用されます。</p>
         <ul id="consentPoints">
           <li>私的使用と学術用途なら、無償で登録も要りません。</li>
-          <li>事業で使う場合（組織の中での利用を含む）は、事前の登録が必要です。直近の事業年度の収入・売上が 10 億円を超える場合は、PFN との別の契約が必要です。</li>
+          <li>事業で使う場合は、組織の中での利用も含めて、事前の登録が必要です。直近の事業年度の収入・売上が 10 億円を超える場合は、Preferred Networks との別の契約が必要です。</li>
         </ul>
         <div class="actions">
           <button id="consentOk" class="primary" aria-describedby="consentText consentPoints">同意してダウンロード</button>
@@ -56,19 +55,15 @@
 
       <div class="actions">
         <button id="btnLoad" class="primary">今すぐ読み込む</button>
-        <button id="btnUnload" class="ghost">解放して VRAM を空ける</button>
+        <button id="btnUnload" class="ghost">VRAM を解放</button>
         <span id="stMsg" class="hint"></span>
       </div>
 
       <div class="field idle">
-        <label for="idleUnloadMin">使わないときにモデルを解放するまで（分）</label>
-        <div class="inline">
-          <input id="idleUnloadMin" class="num" type="number" min="0" max="240" step="1" />
-          <span class="hint">0 にすると解放しません。解放後の最初の翻訳は、読み込みに数秒かかります。</span>
-        </div>
+        <label for="idleUnloadMin">使わないときにモデルを解放するまで</label>
+        <select id="idleUnloadMin"></select>
       </div>
-      <p class="hint">モデルは Hugging Face の公式リポジトリ（pfnet）から一度だけダウンロードし、この拡張機能専用の保存領域に置きます。翻訳はこの PC の GPU（WebGPU）で実行します。</p>
-      <p class="hint">モデルは Preferred Networks が <a href="../licenses/index.html" target="_blank">PLaMo コミュニティライセンス契約</a>で公開しているもので、ダウンロードして使うとこの契約が適用されます。<span id="consentState"></span></p>
+      <p class="hint" id="consentState" hidden></p>
     </section>
 
     <section class="card">
@@ -84,11 +79,11 @@
         </div>
       </div>
       <div class="field">
-        <label>日本語訳の文体</label>
-        <div class="seg" id="form">
+        <label id="formLabel">日本語訳の文体</label>
+        <div class="seg" id="form" role="group" aria-labelledby="formLabel">
           <button data-v="">モデルに任せる</button>
-          <button data-v="plain">常体（だ・である）</button>
-          <button data-v="polite">敬体（です・ます）</button>
+          <button data-v="plain">だ・である</button>
+          <button data-v="polite">です・ます</button>
         </div>
       </div>
     </section>
@@ -96,10 +91,10 @@
     <section class="card">
       <h2>ページ翻訳</h2>
       <div class="field">
-        <label>表示方法</label>
-        <div class="seg" id="pageMode">
-          <button data-v="replace">置換（原文を訳文に置き換え）</button>
-          <button data-v="bilingual">併記（原文の下に訳文）</button>
+        <label id="pageModeLabel">表示方法</label>
+        <div class="seg" id="pageMode" role="group" aria-labelledby="pageModeLabel">
+          <button data-v="replace">置換</button>
+          <button data-v="bilingual">併記</button>
         </div>
       </div>
       <div class="field">
@@ -109,20 +104,16 @@
           <button data-v="ask">翻訳するか尋ねる</button>
           <button data-v="auto">自動で翻訳する</button>
         </div>
-        <p class="hint">翻訳先と違う言語のページが対象です。ページの言語を調べるため、すべてのサイトへのアクセス許可を求めます。判定はこの PC の中で行い、ページの内容は外部に送りません。「何もしない」に戻すと、この許可も外します。</p>
-        <p class="hint warn" id="autoPageWarn" role="status" hidden></p>
+        <p class="hint warn" id="autoPageWarn" role="status" hidden><span id="autoPageWarnText"></span><button id="autoPageGrant" class="ghost small" hidden>許可する</button></p>
       </div>
       <div class="field" id="autoPageMore" hidden>
         <label for="autoPageSkip">対象外のサイト</label>
-        <textarea id="autoPageSkip" rows="3" spellcheck="false" placeholder="example.com" aria-describedby="autoPageSkipHint"></textarea>
-        <p class="hint" id="autoPageSkipHint">1 行に 1 サイトずつ書きます。サブドメインも対象外になります。ここに書いたサイトでも、手動の翻訳は使えます。</p>
-        <p class="hint" id="autoPageBrowser"></p>
+        <textarea id="autoPageSkip" rows="3" spellcheck="false" placeholder="example.com&#10;news.example.org"></textarea>
       </div>
       <div class="row2">
         <div class="field">
           <label for="concurrency">同時に翻訳する数</label>
           <input id="concurrency" type="number" min="1" max="8" step="1" />
-          <p class="hint">1〜8。まとめて処理するほど速くなりますが、GPU の負荷は上がります。</p>
         </div>
         <div class="field">
           <label>&nbsp;</label>
@@ -132,13 +123,11 @@
           </label>
         </div>
       </div>
-      <p class="hint">画面内と少し先だけを順に翻訳し、スクロールや動的に追加された内容は後から翻訳します。</p>
     </section>
 
     <section class="card">
       <h2>用語集</h2>
-      <p class="hint">1 行に 1 語ずつ、<code>原語 = 訳語</code> の形で書きます。モデルに渡すのは、原文に含まれる語だけです。</p>
-      <textarea id="glossary" rows="6" spellcheck="false" placeholder="PLaMo = PLaMo&#10;dashboard = 管理画面&#10;# で始まる行はコメント"></textarea>
+      <textarea id="glossary" rows="6" spellcheck="false" aria-label="用語集" placeholder="PLaMo = PLaMo&#10;dashboard = 管理画面"></textarea>
     </section>
 
     <section class="card">
@@ -151,12 +140,11 @@
       </div>
       <div class="actions">
         <button id="btnShortcuts" class="ghost">ショートカットを変更</button>
-        <span class="hint">選択翻訳キーは、何も選択していなければページ翻訳を切り替えます。どちらの操作も右クリックメニューから使えます。</span>
       </div>
     </section>
 
     <footer class="foot">
-      <span>モデル: PLaMo 3 Translate（Preferred Networks）· 推論: llama.cpp（wllama / WebGPU）· <a href="../licenses/index.html" target="_blank">ライセンス</a></span>
+      <a href="../licenses/index.html" target="_blank">ライセンス</a>
       <span id="saved" class="saved" aria-live="polite"></span>
     </footer>
   </div>

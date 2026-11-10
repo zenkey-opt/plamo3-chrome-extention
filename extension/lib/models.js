@@ -8,7 +8,6 @@ export const MODELS = Object.freeze({
     repo: 'pfnet/plamo-3-translate-2b-GGUF',
     file: 'plamo-3-translate-2b-Q4_K_M.gguf',
     approxBytes: 1807199392,
-    note: '標準。品質重視（VRAM 約 2.1 GB）',
   },
   '0.8b-q4km': {
     id: '0.8b-q4km',
@@ -16,7 +15,6 @@ export const MODELS = Object.freeze({
     repo: 'pfnet/plamo-3-translate-0.8b-GGUF',
     file: 'plamo-3-translate-0.8b-Q4_K_M.gguf',
     approxBytes: 573123200,
-    note: '軽量・高速。VRAM 約 0.6 GB（タグ位置などの精度は 2B に劣る）',
   },
 });
 

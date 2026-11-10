@@ -78,11 +78,11 @@
     root.innerHTML = `<style>${CSS}</style>
       <div class="card" role="dialog" aria-label="PLaMo 翻訳">
         <div class="head">
-          <span class="brand"><span class="logo">訳</span>PLaMo</span>
-          <span class="dir">${ICON.arrow}<select class="tgt" title="翻訳先の言語"></select></span>
+          <span class="brand"><span class="logo" aria-hidden="true">訳</span></span>
+          <span class="dir">${ICON.arrow}<select class="tgt" aria-label="翻訳先の言語"></select></span>
           <span class="sp"></span>
           <button class="copy" title="訳文をコピー" aria-label="訳文をコピー">${ICON.copy}</button>
-          <button class="close" title="閉じる (Esc)" aria-label="閉じる">${ICON.close}</button>
+          <button class="close" title="閉じる" aria-label="閉じる">${ICON.close}</button>
         </div>
         <div class="body"></div>
         <div class="foot"></div>
@@ -188,7 +188,7 @@
         if (sk && m.state === 'loading' && !sk.querySelector('.sk-note')) {
           const n = document.createElement('div');
           n.className = 'sk-note';
-          n.textContent = '翻訳モデルを読み込んでいます（数秒）…';
+          n.textContent = '翻訳モデルを読み込んでいます…';
           sk.appendChild(n);
         }
         return;
@@ -204,10 +204,9 @@
       } else if (m.type === 'done') {
         state.result = m.text;
         ui.body.className = 'body';
-        ui.body.textContent = m.text || '（訳文が空でした）';
+        ui.body.textContent = m.text || '訳文が空でした';
         const secs = m.ms != null ? (m.ms / 1000).toFixed(2) + ' 秒' : '';
         ui.foot.textContent = [
-          'PLaMo 3 Translate',
           m.cached ? 'キャッシュ' : secs,
           !m.cached && m.tokPerSec ? m.tokPerSec + ' tok/s' : '',
         ].filter(Boolean).join(' · ');

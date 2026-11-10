@@ -558,7 +558,7 @@ async function getStatus() {
     info: eng?.state === 'ready' ? eng.info : null,
     // Not called "error": the pages read { error } as "this request failed" (see errorPayload).
     engineError: engineHung
-      ? { code: 'ENGINE_HUNG', message: '翻訳エンジンが応答しません。設定画面の「解放して VRAM を空ける」を押すと、エンジンを作り直せます。' }
+      ? { code: 'ENGINE_HUNG', message: '翻訳エンジンが応答しません。設定画面の「VRAM を解放」を押すと、エンジンを作り直せます。' }
       : eng?.state === 'error'
         ? eng.error || null
         : null,
@@ -709,7 +709,7 @@ async function togglePage(tab, force, pageLang) {
   try {
     await inject(tab.id, ['content/page.js']);
   } catch (e) {
-    return { error: { code: 'NO_ACCESS', message: 'このページでは翻訳できません（ブラウザの内部ページ・ストア・PDF など）。' } };
+    return { error: { code: 'NO_ACCESS', message: 'このページは翻訳できません。' } };
   }
   const r = await chrome.tabs.sendMessage(tab.id, { type: 'plamo:togglePage', force, pageLang }, { frameId: 0 });
   await setTabState(tab.id, !!r?.active);
@@ -728,7 +728,7 @@ async function setTabState(tabId, active) {
 }
 
 function updatePageMenu(active) {
-  chrome.contextMenus.update('plamo-page', { title: active ? '原文に戻す（PLaMo）' : 'このページを翻訳（PLaMo）' }, () => void chrome.runtime.lastError);
+  chrome.contextMenus.update('plamo-page', { title: active ? '原文に戻す' : 'PLaMo でこのページを翻訳' }, () => void chrome.runtime.lastError);
 }
 
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
@@ -795,7 +795,7 @@ async function autoPage(tab, lang) {
   if (!(await modelStatus(currentModel()).catch(() => null))?.present) return { skipped: 'nomodel' };
   if (mode === 'auto') return togglePage(tab, 'on', from);
   await inject(tab.id, ['content/page.js']);
-  const to = (LANG_NAME[settings.targetLang] || settings.targetLang).replace('（実験的）', '');
+  const to = LANG_NAME[settings.targetLang] || settings.targetLang;
   return chrome.tabs.sendMessage(tab.id, { type: 'plamo:offer', lang: from, from: LANG_NAME[from], to }, { frameId: 0 });
 }
 
@@ -839,7 +839,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   syncDetector(true);
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: 'plamo-selection', title: 'PLaMo で翻訳「%s」', contexts: ['selection'] });
-    chrome.contextMenus.create({ id: 'plamo-page', title: 'このページを翻訳（PLaMo）', contexts: ['page', 'frame', 'link', 'image'] });
+    chrome.contextMenus.create({ id: 'plamo-page', title: 'PLaMo でこのページを翻訳', contexts: ['page', 'frame', 'link', 'image'] });
   });
   await chrome.storage.local.remove(OBSOLETE_KEYS);
   if (details.reason === 'install' || details.reason === 'update') {

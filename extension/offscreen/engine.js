@@ -104,7 +104,7 @@ async function load(modelId) {
     await unload(true);
     const file = await openModel(m);
     if (!file) {
-      throw new EngineError('NO_MODEL', `翻訳モデル（${m.label}）がまだダウンロードされていません。拡張機能の設定画面からダウンロードしてください。`);
+      throw new EngineError('NO_MODEL', `翻訳モデル ${m.label} がまだダウンロードされていません。`);
     }
     setState({ state: 'loading', modelId, error: null, info: null });
     const gpu = await gpuInfo();
@@ -132,7 +132,7 @@ async function load(modelId) {
     setState({
       state: 'ready',
       info: {
-        backend: onGpu ? 'WebGPU' : 'CPU（WebAssembly）',
+        backend: onGpu ? 'WebGPU' : 'CPU',
         gpu: onGpu ? gpu?.label || null : null,
         offloaded: off ? `${off[1]}/${off[2]}` : null,
         loadMs: Math.round(performance.now() - t0),
@@ -247,7 +247,7 @@ async function probeTotal(url, signal) {
   const cr = r.headers.get('content-range');
   await r.body?.cancel().catch(() => {});
   const total = Number((cr || '').split('/')[1]);
-  if (!r.ok || !total) throw new EngineError('DOWNLOAD_FAILED', `モデルのサイズを取得できません（HTTP ${r.status}）`);
+  if (!r.ok || !total) throw new EngineError('DOWNLOAD_FAILED', `モデルのサイズを取得できません: HTTP ${r.status}`);
   return total;
 }
 
@@ -267,7 +267,7 @@ async function fetchPart(url, dir, i, start, len, signal, onBytes) {
         got += value.byteLength;
         onBytes(value.byteLength);
       }
-      if (got !== len) throw new Error(`途中で切断（${got}/${len} バイト）`);
+      if (got !== len) throw new Error(`途中で切断されました: ${got}/${len} バイト`);
       const ws = await (await dir.getFileHandle(partName(i), { create: true })).createWritable();
       await ws.write(buf);
       await ws.close();
@@ -275,7 +275,7 @@ async function fetchPart(url, dir, i, start, len, signal, onBytes) {
     } catch (e) {
       onBytes(-got);
       if (signal.aborted) throw e;
-      if (attempt >= 5) throw new EngineError('DOWNLOAD_FAILED', `ダウンロードに失敗しました（パート ${i}）: ${e.message || e}`);
+      if (attempt >= 5) throw new EngineError('DOWNLOAD_FAILED', `パート ${i} のダウンロードに失敗しました: ${e.message || e}`);
       await sleep(1000 * 2 ** attempt);
     }
   }

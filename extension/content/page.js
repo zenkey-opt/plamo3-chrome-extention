@@ -816,6 +816,7 @@
       @keyframes spin { to { transform: rotate(360deg); } }
       .msg { white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
       .msg.err { color: var(--danger); white-space: normal; }
+      .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
       .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
       .seg button, .btn { all: unset; cursor: pointer; padding: 4px 12px; font-size: 12px; color: var(--muted);
         transition: background-color 150ms cubic-bezier(.22,1,.36,1), color 150ms cubic-bezier(.22,1,.36,1); }
@@ -935,7 +936,9 @@
       if (asking) {
         els.spin.hidden = els.retry.hidden = true;
         els.msg.classList.remove('err');
-        els.msg.textContent = S.offer.skipped ? 'このサイトでは今後尋ねません' : `${S.offer.from}のページ`;
+        // the language alone on screen; screen readers get 「英語のページ」
+        if (S.offer.skipped) els.msg.textContent = 'このサイトでは今後尋ねません';
+        else els.msg.replaceChildren(S.offer.from, Object.assign(document.createElement('span'), { className: 'sr', textContent: 'のページ' }));
         els.go.textContent = `${S.offer.to}に翻訳`;
         els.go.disabled = false;
         return;

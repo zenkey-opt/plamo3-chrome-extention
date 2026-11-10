@@ -11,7 +11,7 @@ body.window #pageRow { display: none; }
 .brand { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
 .title { font-weight: 600; font-size: 14px; white-space: nowrap; }
 
-main { padding: 0 12px; }
+main { padding: 0 12px 12px; }
 .panel { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); overflow: hidden; }
 .langbar { display: flex; align-items: center; gap: 4px; padding: 8px; border-bottom: 1px solid var(--border); background: var(--bg-soft); }
 .langbar select { flex: 1; min-width: 0; font-size: 12px; background-color: var(--bg); border-color: var(--border); }
@@ -66,14 +66,3 @@ main { padding: 0 12px; }
 .site[hidden] { display: none; }
 .site input { width: 14px; height: 14px; margin: 0; accent-color: var(--accent); }
 
-.bottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 16px 12px;
-  font-size: 11px;
-  color: var(--faint);
-}
-.model { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.keys { white-space: nowrap; }

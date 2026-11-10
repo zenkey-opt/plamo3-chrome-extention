@@ -4,8 +4,8 @@
 export const LANGS = [
   ['ja', '日本語'],
   ['en', '英語'],
-  ['zh-hans', '中国語（簡体字）'],
-  ['zh-hant', '中国語（繁体字）'],
+  ['zh-hans', '簡体字中国語'],
+  ['zh-hant', '繁体字中国語'],
   ['ko', '韓国語'],
   ['fr', 'フランス語'],
   ['de', 'ドイツ語'],
@@ -55,7 +55,7 @@ export const LANGS = [
   ['ms', 'マレー語'],
   ['lv', 'ラトビア語'],
   ['lt', 'リトアニア語'],
-  ['ja(easy)', 'やさしい日本語（実験的）'],
+  ['ja(easy)', 'やさしい日本語'],
 ];
 
 export const LANG_NAME = Object.fromEntries(LANGS);

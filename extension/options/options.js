@@ -10,10 +10,13 @@ let last = null; // last status
 let busy = false; // an action button is running
 let consentFor = ''; // model whose download waits for the licence agreement
 
+// a downloaded model: a check and its size (the check keeps the words for screen readers)
+const CHECK = '<svg role="img" aria-label="ダウンロード済み" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>';
+
 const STATUS_TEXT = {
   checking: '確認中…',
-  ready: '準備完了（読み込み済み）',
-  idle: '待機中（次の翻訳で自動的に読み込みます）',
+  ready: '準備完了',
+  idle: '待機中',
   loading: 'モデル読み込み中…',
   downloading: 'ダウンロード中…',
   nomodel: 'モデル未ダウンロード',
@@ -30,14 +33,13 @@ async function init() {
   $('#targetLang').value = settings.targetLang;
   $('#altTargetLang').value = settings.altTargetLang;
   $('#concurrency').value = settings.concurrency;
-  $('#idleUnloadMin').value = settings.idleUnloadMin;
+  fillIdle();
   $('#useTitleContext').checked = !!settings.useTitleContext;
   $('#glossary').value = settings.glossary;
   setSeg('#form', settings.form);
   setSeg('#pageMode', settings.pageMode);
   setSeg('#autoPage', settings.autoPage);
   $('#autoPageSkip').value = settings.autoPageSkip;
-  $('#autoPageBrowser').textContent = `ブラウザが出す翻訳の提案と重なるときは、${internalPage('settings/languages')} でブラウザの翻訳をオフにできます。`;
   renderAutoPage();
   renderModels();
 
@@ -49,32 +51,32 @@ async function init() {
     e.target.value = n;
     save({ concurrency: n });
   });
-  $('#idleUnloadMin').addEventListener('change', (e) => {
-    const n = Math.max(0, Math.min(240, Math.round(Number(e.target.value))));
-    e.target.value = Number.isFinite(n) ? n : DEFAULTS.idleUnloadMin;
-    save({ idleUnloadMin: Number(e.target.value) });
-  });
+  $('#idleUnloadMin').addEventListener('change', (e) => save({ idleUnloadMin: Number(e.target.value) }));
   let gTimer = 0;
   $('#glossary').addEventListener('input', (e) => {
     clearTimeout(gTimer);
     gTimer = setTimeout(() => {
       const n = parseGlossary(e.target.value).length;
-      save({ glossary: e.target.value }, `用語集を保存しました（${n} 語）`);
+      save({ glossary: e.target.value }, `${n} 語の用語集を保存しました`);
     }, 500);
   });
   bindSeg('#form', (v) => save({ form: v }));
   bindSeg('#pageMode', (v) => save({ pageMode: v }));
   bindSeg('#autoPage', setAutoPage);
+  $('#autoPageGrant').addEventListener('click', async () => {
+    const granted = await chrome.permissions.request({ origins: AUTO_ORIGINS }).catch(() => false);
+    renderAutoPage(granted ? '' : 'サイトへのアクセスが許可されませんでした。');
+  });
   let sTimer = 0;
   $('#autoPageSkip').addEventListener('input', (e) => {
     clearTimeout(sTimer);
     sTimer = setTimeout(() => {
-      save({ autoPageSkip: e.target.value }, `対象外のサイトを保存しました（${parseSites(e.target.value).length} 件）`);
+      save({ autoPageSkip: e.target.value }, `対象外のサイトを ${parseSites(e.target.value).length} 件保存しました`);
     }, 500);
   });
 
   $('#btnLoad').addEventListener('click', () =>
-    act('モデルを読み込んでいます…', { type: 'loadModel' }, (s) => (s.info ? `読み込みました（${(s.info.loadMs / 1000).toFixed(1)} 秒）` : '')),
+    act('モデルを読み込んでいます…', { type: 'loadModel' }, (s) => (s.info ? `${(s.info.loadMs / 1000).toFixed(1)} 秒で読み込みました` : '')),
   );
   $('#btnUnload').addEventListener('click', () => act('解放しています…', { type: 'unloadModel' }, () => '解放しました'));
   $('#dlCancel').addEventListener('click', () => act('', { type: 'cancelDownload' }, () => 'ダウンロードを中止しました'));
@@ -108,7 +110,7 @@ function renderModels() {
     <div class="model" data-id="${m.id}">
       <label class="mpick">
         <input type="radio" name="model" value="${m.id}" />
-        <span class="mtext"><span class="mname">PLaMo 3 Translate ${m.label}</span><span class="mnote">${m.note}</span></span>
+        <span class="mname">${m.label}</span>
       </label>
       <span class="mstate fig">—</span>
       <span class="mbtns">
@@ -121,7 +123,7 @@ function renderModels() {
   for (const r of document.querySelectorAll('#models input[type=radio]')) {
     r.checked = r.value === settings.model;
     r.addEventListener('change', () => {
-      save({ model: r.value }, 'モデルを切り替えました（次の翻訳から使います）');
+      save({ model: r.value }, 'モデルを切り替えました');
       refresh();
     });
   }
@@ -130,7 +132,7 @@ function renderModels() {
       const id = b.closest('.model').dataset.id;
       if (b.dataset.act === 'download') {
         startDownload(id);
-      } else if (confirm(`PLaMo 3 Translate ${MODELS[id].label} を削除しますか？もう一度使うには、ダウンロードし直す必要があります。`)) {
+      } else if (confirm(`PLaMo 3 Translate ${MODELS[id].label} を削除しますか？`)) {
         act('削除しています…', { type: 'deleteModel', modelId: id }, () => '削除しました');
       }
     });
@@ -154,7 +156,9 @@ function closeConsent() {
 async function showConsent() {
   const c = await licenseConsent();
   const day = c ? new Date(c.at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
-  $('#consentState').textContent = c ? `この契約には ${day}に同意しました。` : '';
+  const line = $('#consentState');
+  line.hidden = !c;
+  line.innerHTML = c ? `${day}に <a href="../licenses/index.html" target="_blank">PLaMo コミュニティライセンス契約</a>に同意しました。` : '';
 }
 
 function showModels(s) {
@@ -166,10 +170,11 @@ function showModels(s) {
     row.dataset.selected = String(id === settings.model);
     row.querySelector('input').checked = id === settings.model;
     const stEl = row.querySelector('.mstate');
+    // downloaded: a check and the size; not yet: the size next to the download button
     if (dl) stEl.textContent = 'ダウンロード中';
-    else if (ms.present) stEl.innerHTML = `<span class="ok">ダウンロード済み</span>（${fmtBytes(ms.size)}）`;
-    else if (ms.partial) stEl.textContent = '途中まで（再開できます）';
-    else stEl.textContent = `未ダウンロード（約 ${fmtBytes(m.approxBytes)}）`;
+    else if (ms.present) stEl.innerHTML = `${CHECK}${fmtBytes(ms.size)}`;
+    else if (ms.partial) stEl.textContent = '途中まで';
+    else stEl.textContent = fmtBytes(m.approxBytes);
     const bDl = row.querySelector('[data-act=download]');
     const bDel = row.querySelector('[data-act=delete]');
     bDl.hidden = !!ms.present || dl;
@@ -197,7 +202,7 @@ function showDownload(s) {
   }
   const pct = d.total ? (d.done / d.total) * 100 : 0;
   $('#dlBar').style.transform = `scaleX(${(pct / 100).toFixed(4)})`;
-  const parts = [`${name}: ${fmtBytes(d.done)} / ${fmtBytes(d.total)}（${pct.toFixed(0)}%）`];
+  const parts = [`${fmtBytes(d.done)} / ${fmtBytes(d.total)}`];
   if (d.bps > 0) {
     parts.push(`${(d.bps / 1048576).toFixed(1)} MB/s`);
     const rest = (d.total - d.done) / d.bps;
@@ -217,16 +222,15 @@ function showStatus(s) {
   st.querySelector('.label').textContent = STATUS_TEXT[s.state] || s.state;
   const known = !!s.models; // false: the status request itself failed, nothing below is known
   if (s.info) {
-    $('#stBackend').textContent = `${s.info.backend}${s.info.gpu ? `（${s.info.gpu}）` : ''}${s.info.offloaded ? ` · GPU に ${s.info.offloaded} 層` : ''}`;
-    $('#stBuild').textContent = `${s.info.libllama}（wllama・WebGPU）· コンテキスト ${s.info.nCtx} · ${s.info.slots} 並列 · 読み込み ${(s.info.loadMs / 1000).toFixed(1)} 秒`;
+    $('#stBackend').textContent = [s.info.backend, s.info.gpu, s.info.offloaded ? `GPU に ${s.info.offloaded} 層` : ''].filter(Boolean).join(' · ');
+    $('#stBuild').textContent = `${s.info.libllama} · コンテキスト ${s.info.nCtx} · ${s.info.slots} 並列 · 読み込み ${(s.info.loadMs / 1000).toFixed(1)} 秒`;
   } else {
-    $('#stBackend').textContent = !known ? '—' : s.webgpu ? 'WebGPU（モデル読み込み時に使用）' : `このブラウザでは WebGPU が使えません（CPU で実行するため低速です）。${internalPage('gpu')} で確認できます。`;
+    $('#stBackend').textContent = !known ? '—' : s.webgpu ? 'WebGPU' : `WebGPU が使えないため、CPU で実行します。${internalPage('gpu')} で確認できます。`;
     $('#stBuild').textContent = '—';
   }
   $('#stStorage').textContent = s.storageUsed != null ? fmtBytes(s.storageUsed) : '—';
   const err = s.engineError || s.error;
   if (s.state === 'error' && err) $('#stMsg').textContent = err.message;
-  else if (s.state === 'nomodel' && !busy) $('#stMsg').textContent = '使うモデルを選んで「ダウンロード」を押してください。';
   else if ($('#stMsg').dataset.sticky !== '1') $('#stMsg').textContent = '';
   $('#btnLoad').disabled = busy || !['idle', 'error'].includes(s.state);
   $('#btnUnload').disabled = busy || !['ready', 'error'].includes(s.state);
@@ -265,7 +269,7 @@ async function refresh() {
       // is the service worker itself alive? (unknown message types are answered right away)
       const alive = await ask({ type: 'ping' }, 3000).then(() => true, () => false);
       message = alive
-        ? '翻訳エンジンが応答しません（8 秒以上）。'
+        ? '翻訳エンジンが応答しません。'
         : `拡張機能のバックグラウンド処理が応答しません。${internalPage('extensions')} でこの拡張機能を再読み込みしてください。`;
     }
     showStatus({ state: 'error', error: { message } });
@@ -305,7 +309,7 @@ async function setAutoPage(v) {
     const granted = await chrome.permissions.request({ origins: AUTO_ORIGINS }).catch(() => false);
     if (!granted) {
       setSeg('#autoPage', settings.autoPage);
-      renderAutoPage('サイトへのアクセスが許可されなかったため、設定は前のままです。');
+      renderAutoPage('サイトへのアクセスが許可されませんでした。');
       return;
     }
   }
@@ -318,12 +322,22 @@ async function setAutoPage(v) {
 async function renderAutoPage(note = '') {
   const on = settings.autoPage === 'ask' || settings.autoPage === 'auto';
   $('#autoPageMore').hidden = !on;
-  let warn = note;
-  if (!warn && on && !(await chrome.permissions.contains({ origins: AUTO_ORIGINS }).catch(() => false))) {
-    warn = 'サイトへのアクセスが許可されていないため、外国語のページを開いても何も起きません。もう一度選ぶと、許可を求めます。';
-  }
-  $('#autoPageWarn').textContent = warn;
+  // the setting is on but the access is gone (revoked on the extensions page): say so, offer to ask again
+  const missing = !note && on && !(await chrome.permissions.contains({ origins: AUTO_ORIGINS }).catch(() => false));
+  const warn = note || (missing ? 'サイトへのアクセスが許可されていません。' : '');
+  $('#autoPageWarnText').textContent = warn;
+  $('#autoPageGrant').hidden = !missing;
   $('#autoPageWarn').hidden = !warn;
+}
+
+// presets; a value saved by an older version stays selectable
+function fillIdle() {
+  const v = Number(settings.idleUnloadMin);
+  const mins = [5, 10, 30, 60];
+  if (v > 0 && !mins.includes(v)) mins.push(v);
+  mins.sort((a, b) => a - b);
+  $('#idleUnloadMin').innerHTML = mins.map((n) => `<option value="${n}">${n} 分</option>`).join('') + '<option value="0">解放しない</option>';
+  $('#idleUnloadMin').value = String(Number.isFinite(v) ? v : DEFAULTS.idleUnloadMin);
 }
 
 function setSeg(sel, v) {

@@ -13,7 +13,7 @@
       <span class="logo">訳</span>
       <span class="title">PLaMo 3 Translate</span>
     </div>
-    <button id="status" class="status" data-state="checking" title="翻訳エンジンの状態">
+    <button id="status" class="status" data-state="checking">
       <span class="dot"></span><span class="label">確認中…</span>
     </button>
     <button id="opts" class="icon" title="設定" aria-label="設定">
@@ -24,13 +24,13 @@
   <main>
     <section class="panel">
       <div class="langbar">
-        <select id="src" title="原文の言語"></select>
+        <select id="src" aria-label="原文の言語"></select>
         <button id="swap" class="icon" title="言語と文を入れ替え" aria-label="入れ替え">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5h10M10 3l2.5 2.5L10 8M13.5 10.5h-10M6 8l-2.5 2.5L6 13"/></svg>
         </button>
-        <select id="tgt" title="訳文の言語"></select>
+        <select id="tgt" aria-label="訳文の言語"></select>
       </div>
-      <textarea id="input" spellcheck="false" placeholder="翻訳する文章（Ctrl+Enter で翻訳）"></textarea>
+      <textarea id="input" spellcheck="false" placeholder="原文" aria-label="原文"></textarea>
       <div class="divider"></div>
       <div class="out">
         <div id="output" class="output" aria-live="polite"></div>
@@ -46,8 +46,8 @@
     <section class="page" id="pageRow">
       <button id="pageBtn" class="primary">このページを翻訳</button>
       <div class="seg" role="group" aria-label="ページ翻訳の表示">
-        <button data-mode="replace" title="原文を訳文に置き換える">置換</button>
-        <button data-mode="bilingual" title="原文の下に訳文を表示">併記</button>
+        <button data-mode="replace">置換</button>
+        <button data-mode="bilingual">併記</button>
       </div>
     </section>
     <label class="site" id="siteRow" hidden>
@@ -55,11 +55,6 @@
       <span id="siteSkipText"></span>
     </label>
   </main>
-
-  <footer class="bottom">
-    <span id="model" class="model">—</span>
-    <span class="keys" id="keys"></span>
-  </footer>
 
   <script type="module" src="popup.js"></script>
 </body>

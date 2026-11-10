@@ -8,7 +8,7 @@ for (const d of document.querySelectorAll('details[data-src]')) {
       const r = await fetch(d.dataset.src);
       pre.textContent = (await r.text()).replace(/\r\n/g, '\n').trim();
     } catch (e) {
-      pre.textContent = `読み込めませんでした（${d.dataset.src}）: ${e.message || e}`;
+      pre.textContent = `${d.dataset.src} を読み込めませんでした: ${e.message || e}`;
     }
   });
 }

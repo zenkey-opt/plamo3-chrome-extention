@@ -1,5 +1,5 @@
 // Hung engine: the engine stops answering RPCs (its thread stays free). The options page must say
-// so instead of sitting at "確認中…", and "解放して VRAM を空ける" must recover.
+// so instead of sitting at "確認中…", and "VRAM を解放" must recover.
 // node hung_engine_test.mjs
 import { execFileSync } from 'node:child_process';
 

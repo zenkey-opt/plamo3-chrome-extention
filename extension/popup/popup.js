@@ -21,8 +21,6 @@ const el = {
   siteSkip: $('#siteSkip'),
   siteSkipText: $('#siteSkipText'),
   seg: [...document.querySelectorAll('.seg button')],
-  model: $('#model'),
-  keys: $('#keys'),
 };
 
 let settings;
@@ -65,26 +63,12 @@ async function init() {
   el.input.focus();
   el.input.setSelectionRange(el.input.value.length, el.input.value.length);
   if (el.input.value.trim()) translateNow();
-  showShortcuts();
   refreshStatus();
   setInterval(refreshStatus, 1500);
   if (!isWindow) {
     [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     refreshPage();
   }
-}
-
-// footer: the shortcuts actually bound (the user may change them in chrome://extensions/shortcuts)
-async function showShortcuts() {
-  const cmds = await chrome.commands.getAll();
-  const kbd = (s) => s.split('+').map((k) => `<kbd>${k}</kbd>`).join('+');
-  const parts = [];
-  const sel = cmds.find((c) => c.name === 'translate-selection')?.shortcut;
-  const page = cmds.find((c) => c.name === 'translate-page')?.shortcut;
-  if (sel) parts.push(`${kbd(sel)} 選択`);
-  if (page) parts.push(`${kbd(page)} ページ`);
-  el.keys.innerHTML = parts.join(' · ');
-  el.keys.title = '未選択で ' + (sel || '選択翻訳キー') + ' を押すとページ翻訳を切り替えます';
 }
 
 function hasOption(select, v) {
@@ -95,7 +79,7 @@ function fillLangs() {
   const opts = LANGS.map(([c, n]) => `<option value="${c}">${n}</option>`).join('');
   el.src.innerHTML = `<option value="auto">自動検出</option>${opts}`;
   el.tgt.innerHTML =
-    `<option value="auto">自動（${langName(settings.targetLang)} ⇄ ${langName(settings.altTargetLang)}）</option>` + opts;
+    '<option value="auto">自動</option>' + opts;
 }
 
 function bind() {
@@ -227,7 +211,7 @@ function translateNow() {
 function onMessage(m) {
   if (m.type === 'engine') {
     if (m.state === 'loading') {
-      el.meta.textContent = '翻訳モデルを読み込んでいます（数秒）…';
+      el.meta.textContent = '翻訳モデルを読み込んでいます…';
       setStatus({ state: 'loading' });
     } else refreshStatus();
     return;
@@ -268,16 +252,15 @@ function setStatus(s) {
   el.status.dataset.state = state;
   el.statusLabel.textContent = state === 'downloading' && s.dl?.total ? `ダウンロード中 ${Math.floor((s.dl.done / s.dl.total) * 100)}%` : STATUS_TEXT[state] || state;
   el.status.dataset.action = ['nomodel', 'error', 'downloading'].includes(state) ? 'options' : '';
+  // tooltip: only what the label does not show (the model, an error, the queue, where a click goes)
   const lines = [];
-  if (s.info) lines.push(`${s.info.backend}${s.info.gpu ? `（${s.info.gpu}）` : ''} · 読み込み ${(s.info.loadMs / 1000).toFixed(1)} 秒`);
-  if (state === 'idle') lines.push('モデルはまだ読み込まれていません。次の翻訳で自動的に読み込みます（数秒）。');
-  if (state === 'nomodel') lines.push('翻訳モデルがまだダウンロードされていません。クリックで設定画面を開きます。');
-  if (state === 'downloading') lines.push('クリックすると、進み具合を表示する設定画面を開きます。');
+  const head = [s.model, s.info?.backend, s.info?.gpu].filter(Boolean).join(' · ');
+  if (head) lines.push(head);
   const err = s.engineError || s.error;
   if (state === 'error' && err) lines.push(err.message);
-  if (s.queue && (s.queue.active || s.queue.pending)) lines.push(`処理中 ${s.queue.active} / 待ち ${s.queue.pending}`);
-  el.status.title = lines.join('\n') || 'PLaMo 3 Translate（ブラウザ内で実行）';
-  if (s.model) el.model.textContent = `PLaMo 3 Translate ${s.model}`;
+  if (s.queue && (s.queue.active || s.queue.pending)) lines.push(`処理中 ${s.queue.active} · 待ち ${s.queue.pending}`);
+  if (el.status.dataset.action === 'options') lines.push('クリックで設定画面を開きます');
+  el.status.title = lines.join('\n');
 }
 
 async function refreshStatus() {
