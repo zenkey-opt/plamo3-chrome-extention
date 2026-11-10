@@ -71,7 +71,7 @@ async function init() {
   }
 }
 
-// footer: the shortcuts actually bound (the user may change them in brave://extensions/shortcuts)
+// footer: the shortcuts actually bound (the user may change them in chrome://extensions/shortcuts)
 async function showShortcuts() {
   const cmds = await chrome.commands.getAll();
   const kbd = (s) => s.split('+').map((k) => `<kbd>${k}</kbd>`).join('+');

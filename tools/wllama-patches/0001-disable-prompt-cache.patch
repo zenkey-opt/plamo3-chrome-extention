@@ -6,7 +6,7 @@ index 17303e2..b8447b2 100644
      // init threadpool
      ggml_threadpool_params_default(params.cpuparams.n_threads);
  
-+    // [plamo3-brave] disable the host-RAM prompt cache. Under WebGPU every slot save is a chain of
++    // [plamo3-translate-local] disable the host-RAM prompt cache. Under WebGPU every slot save is a chain of
 +    // GPU readbacks (~11 s per batch with a unified KV, measured) and the cache keeps growing up to
 +    // 8 GiB of wasm memory. Translation requests never repeat a prompt, so it only costs.
 +    params.cache_ram_mib = 0;

@@ -1,4 +1,4 @@
-// Minimal CDP driver for testing the extension in an isolated Brave profile.
+// Minimal CDP driver for testing the extension in an isolated browser profile.
 // usage: node cdp.mjs <cmd> [...args]   (CDP_PORT env, default 9333)
 //   targets | open <url> | close <match> | sw <js> | page <match> <js> | iso <match> <js>
 //   shot <match> <file> [w h] | key <match> <key> [modifiers] | click <match> <x> <y>
@@ -198,7 +198,7 @@ try {
     c.close();
     out('clicked');
   } else if (cmd === 'quit') {
-    // close the whole test browser (never use taskkill: the user's Brave has the same image name)
+    // close the whole test browser (never use taskkill: the user's own browser may have the same image name)
     const v = await (await fetch(BASE + '/json/version')).json();
     const c = await connect(v.webSocketDebuggerUrl);
     await c.send('Browser.close').catch(() => {});
@@ -219,7 +219,7 @@ try {
       seen.add(windowId);
       if (mode === 'offscreen') {
         await c.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'normal' } });
-        // this PC's virtual desktop spans x -1265..2167 (4 monitors); x=4000 is outside all of them
+        // x=4000 is meant to be outside every monitor; pass another x if the desktop reaches that far
         await c.send('Browser.setWindowBounds', { windowId, bounds: { left: Number(args[1] || 4000), top: 100, width: 1280, height: 900 } });
       } else {
         await c.send('Browser.setWindowBounds', { windowId, bounds: { windowState: mode } });

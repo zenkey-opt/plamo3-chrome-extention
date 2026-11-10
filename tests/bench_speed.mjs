@@ -1,4 +1,4 @@
-// Translation speed benchmark in the test Brave (2B model). Every request has a new text, as in real use.
+// Translation speed benchmark in the test browser (2B model). Every request has a new text, as in real use.
 // node bench_speed.mjs <label> [out.json] [rounds]
 //   sequential: 3 short / 3 medium / 3 long texts one after another (median per class)
 //   page:       24 texts of a web page submitted at once (the page translator runs as many as the engine has slots)

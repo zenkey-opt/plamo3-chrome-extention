@@ -1,5 +1,5 @@
-# List visible top-level windows of the isolated test Brave (profile dir in its command line) with real screen rects.
-param([string]$Profile = 'brave-profile-dev')
+# List visible top-level windows of the isolated test browser (profile dir in its command line) with real screen rects.
+param([string]$Profile = 'test-profile', [string]$Exe = $(if ($env:BROWSER) { Split-Path $env:BROWSER -Leaf } else { 'brave.exe' }))
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type @"
 using System; using System.Runtime.InteropServices; using System.Text;
@@ -14,7 +14,7 @@ public static class W {
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
 }
 "@
-$pids = @(Get-CimInstance Win32_Process -Filter "Name='brave.exe'" | Where-Object { $_.CommandLine -like "*$Profile*" } | ForEach-Object { [uint32]$_.ProcessId })
+$pids = @(Get-CimInstance Win32_Process -Filter "Name='$Exe'" | Where-Object { $_.CommandLine -like "*$Profile*" } | ForEach-Object { [uint32]$_.ProcessId })
 $out = New-Object System.Collections.ArrayList
 [W]::EnumWindows({ param($h, $l)
   $p = 0; [void][W]::GetWindowThreadProcessId($h, [ref]$p)

@@ -1,9 +1,9 @@
-# CPU usage of the isolated test Brave (processes whose command line contains the given profile dir).
-# usage: powershell -File cpu_sample.ps1 -Profile brave-profile-dev -Seconds 8
-param([string]$Profile = 'brave-profile-dev', [int]$Seconds = 8)
+# CPU usage of the isolated test browser (processes whose command line contains the given profile dir).
+# usage: powershell -File cpu_sample.ps1 -Profile test-profile -Seconds 8
+param([string]$Profile = 'test-profile', [string]$Exe = $(if ($env:BROWSER) { Split-Path $env:BROWSER -Leaf } else { 'brave.exe' }), [int]$Seconds = 8)
 function Snap {
   $h = @{}
-  Get-CimInstance Win32_Process -Filter "Name='brave.exe'" | Where-Object { $_.CommandLine -like "*$Profile*" } | ForEach-Object {
+  Get-CimInstance Win32_Process -Filter "Name='$Exe'" | Where-Object { $_.CommandLine -like "*$Profile*" } | ForEach-Object {
     $type = if ($_.CommandLine -match '--type=([a-z-]+)') { $Matches[1] } else { 'browser' }
     if ($_.CommandLine -match '--utility-sub-type=([\w.]+)') { $type += ':' + $Matches[1] }
     $h[$_.ProcessId] = @{ t = ($_.KernelModeTime + $_.UserModeTime) / 1e7; type = $type }

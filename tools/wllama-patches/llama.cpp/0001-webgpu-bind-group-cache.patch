@@ -14,7 +14,7 @@ index 15e6c78..538b25b 100644
      size_t       slot_size   = 0;
      uint32_t     slot_count  = 0;
      uint32_t     next_slot   = 0;
-+    // [plamo3-brave] the params of the batch being encoded are staged here and uploaded with a single
++    // [plamo3-translate-local] the params of the batch being encoded are staged here and uploaded with a single
 +    // WriteBuffer right before the batch is submitted, instead of one WriteBuffer per kernel
 +    std::vector<uint8_t> host;
 +    size_t               staged_end = 0;
@@ -52,7 +52,7 @@ index 15e6c78..538b25b 100644
  
      std::string vendor;
  
-+    // [plamo3-brave] Decoding runs the same kernels on the same buffer ranges for every token, but each
++    // [plamo3-translate-local] Decoding runs the same kernels on the same buffer ranges for every token, but each
 +    // dispatch created a new bind group (plus GetBindGroupLayout) through the browser's WebGPU bindings:
 +    // about a third of the decode time in a CPU profile. Bind groups are cached by their exact entries;
 +    // the cache is dropped whenever a ggml buffer is freed (a freed buffer's handle can be reused).

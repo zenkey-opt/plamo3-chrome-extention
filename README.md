@@ -1,9 +1,10 @@
-# PLaMo 3 Translate Local（Brave 拡張）
+# PLaMo 3 Translate Local（Chrome 拡張機能）
 
-PFN の翻訳特化 LLM **PLaMo 3 Translate**（2026-11-05 公開のオープンウェイト）を、Brave の中だけで動かす
-拡張機能です。非公式。推論は llama.cpp の WebAssembly + WebGPU 版（[wllama](https://github.com/ngxson/wllama)）で行い、
+PFN の翻訳特化 LLM **PLaMo 3 Translate**（2026-11-05 公開のオープンウェイト）を、ブラウザの中だけで動かす
+Chrome 拡張機能（Manifest V3）です。非公式。推論は llama.cpp の WebAssembly + WebGPU 版（[wllama](https://github.com/ngxson/wllama)）で行い、
 **サーバーもネイティブアプリも不要**です。原文・訳文は PC の外に出ません（通信するのは初回のモデル取得で
 huggingface.co にアクセスするときだけ）。
+動作確認は Brave 1.99（Chromium 157）で行っています。
 
 ## できること
 
@@ -21,13 +22,15 @@ huggingface.co にアクセスするときだけ）。
 
 ## 必要なもの
 
-- Brave / Chrome 137 以降、WebGPU が有効なこと（`brave://gpu` の WebGPU が Hardware accelerated）
+- Chrome 137 以降、または Chromium 137 以降のブラウザ（Brave など）で、WebGPU が有効なこと
+  （`chrome://gpu` の WebGPU が Hardware accelerated）
 - VRAM：2B で約 2.1 GB、0.8B で約 0.6 GB
 - 保存領域：2B で 1.81 GB、0.8B で 573 MB（拡張機能専用の領域 = OPFS。拡張を削除すると一緒に消えます）
 
 ## セットアップ
 
-1. `brave://extensions` → デベロッパーモード ON →「パッケージ化されていない拡張機能を読み込む」→ `extension` フォルダ
+1. `chrome://extensions` → デベロッパーモード ON →「パッケージ化されていない拡張機能を読み込む」→ `extension` フォルダ
+   （Brave でも同じ URL で開けます）
 2. 自動で開く設定画面で、使うモデルの「ダウンロード」を押す（Hugging Face の pfnet 公式リポジトリから一度だけ。
    途中で止まっても、もう一度押せば続きから）
 3. 以上。翻訳するときに自動で読み込み（初回 5〜8 秒）、10 分使わなければ解放して VRAM を返します（設定で変更可）。
@@ -37,7 +40,7 @@ huggingface.co にアクセスするときだけ）。
 ## 構成
 
 ```
-extension/               Brave に読み込むフォルダ（これだけで完結）
+extension/               ブラウザに読み込むフォルダ（これだけで完結）
   manifest.json          MV3。CSP に 'wasm-unsafe-eval'（WebAssembly 用）
   background.js          キュー・キャッシュ・UI との仲介・オフスクリーン文書の管理
   offscreen/engine.js    推論エンジン（wllama）とモデルのダウンロード
@@ -54,7 +57,7 @@ tools/
   wllama-patches/        wllama と llama.cpp（ggml-webgpu）へのパッチ（下の「仕組みメモ」）
   vendor-wllama.mjs      ビルドを extension/vendor/wllama に取り込む（MV3 向けの書き換え込み）
   gen-notices.mjs        wasm に入っているソフトウェアのライセンス表示（THIRD-PARTY-NOTICES.txt）を生成
-tests/                   CDP で隔離した Brave を動かす検証スクリプトとテストページ
+tests/                   隔離したテスト用ブラウザを CDP で動かす検証スクリプトとテストページ
 ```
 
 ## 速度（実測、RTX 2080 SUPER）
@@ -154,7 +157,7 @@ node tools/gen-notices.mjs                                              # ライ
 
 `build-wllama.sh` 冒頭のコミット（wllama / llama.cpp）を変えると別バージョンになります。
 
-速度を測るとき（隔離した Brave、`tests/launch-test-brave.sh`）：
+速度を測るとき（隔離したテスト用ブラウザ、`tests/launch-test-browser.sh`）：
 
 ```
 bash tests/use-build.sh                       # .work/wsrc/build をテスト用コピーに入れて再読み込み
@@ -167,14 +170,18 @@ bash tests/ab-configs.sh 'a|4|4|unified|8192|off' 'b|8|8|unified|8192|off'   # �
 bash tests/use-shader-hook.sh '<json>'        # シェーダーを再ビルドせずに差し替えて測る（tests/shader-variants.js）
 bash tests/use-logprobs.sh on && node tests/logprob_compare.mjs run a   # 訳文のトークンごとの確率（diff a b で比較）
 ```
-（`gpu_profile.mjs` は `BRAVE_EXTRA_FLAGS=--enable-webgpu-developer-features` で起動したテスト用 Brave で。
+（`gpu_profile.mjs` は `BROWSER_EXTRA_FLAGS=--enable-webgpu-developer-features` で起動したテスト用ブラウザで。
 そうしないとタイムスタンプが 0.1 ms 単位に丸められます）
+
+テスト用ブラウザは `--load-extension` で拡張機能を読み込みます。Chrome の正式版は 137 からこのフラグを受け付けないため、
+既定では Brave を使います。`BROWSER` に Chromium や Chrome for Testing の実行ファイルを指定することもできます。
+窓は画面の外（`TEST_WINDOW_POS`、既定は 4000,100）に開きます。
 
 ## トラブルシュート
 
 - 状態が「モデル未ダウンロード」：設定画面で「ダウンロード」。
-- 実行環境が「CPU（WebAssembly）」：WebGPU が使えていません（`brave://gpu` を確認）。CPU では非常に遅くなります。
-- ショートカットが「未設定」：他の拡張やブラウザのキーと衝突しています。`brave://extensions/shortcuts` で割り当ててください。
+- 実行環境が「CPU（WebAssembly）」：WebGPU が使えていません（`chrome://gpu` を確認）。CPU では非常に遅くなります。
+- ショートカットが「未設定」：他の拡張やブラウザのキーと衝突しています。`chrome://extensions/shortcuts` で割り当ててください。
 
 ## ライセンス
 

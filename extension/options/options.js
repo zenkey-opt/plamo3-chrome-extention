@@ -223,7 +223,7 @@ async function refresh() {
       const alive = await ask({ type: 'ping' }, 3000).then(() => true, () => false);
       message = alive
         ? '翻訳エンジンが応答しません（8 秒以上）。'
-        : '拡張機能のバックグラウンド処理が応答しません。brave://extensions でこの拡張機能を再読み込みしてください。';
+        : '拡張機能のバックグラウンド処理が応答しません。chrome://extensions でこの拡張機能を再読み込みしてください。';
     }
     showStatus({ state: 'error', error: { message } });
   } finally {

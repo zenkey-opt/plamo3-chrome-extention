@@ -3,7 +3,7 @@
 // Needs: the test copy vendored from a GGML_WEBGPU_GPU_PROFILE build
 //   (BUILD_DIR=build-prof EXTRA_CMAKE_ARGS=-DGGML_WEBGPU_GPU_PROFILE=ON bash tools/build-wllama.sh;
 //    EXT_DIR=.work/ext-test node tools/vendor-wllama.mjs --wasm-dir .work/wsrc/build-prof --reuse-index)
-// and the test Brave started with BRAVE_EXTRA_FLAGS=--enable-webgpu-developer-features
+// and the test browser started with BROWSER_EXTRA_FLAGS=--enable-webgpu-developer-features
 // (otherwise timestamps are quantized to 100 us).
 // The profile build runs one compute pass per dispatch, so its wall times are not representative;
 // compare GPU busy time per graph with the release build's wall time per graph instead.
