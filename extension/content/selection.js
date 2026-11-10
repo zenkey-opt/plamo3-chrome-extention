@@ -5,53 +5,58 @@
 
   const ICON = {
     copy: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5.25" y="5.25" width="8" height="8" rx="1.75"/><path d="M10.75 5.25V3.5A1.75 1.75 0 0 0 9 1.75H3.5A1.75 1.75 0 0 0 1.75 3.5V9A1.75 1.75 0 0 0 3.5 10.75h1.75"/></svg>',
-    check: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3L13 4.5"/></svg>',
-    close: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
-    arrow: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>',
+    check: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3L13 4.5"/></svg>',
+    close: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
+    arrow: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>',
   };
 
+  // graphite neutrals and the 藍 accent of the extension pages (ui/base.css), inside a shadow root
   const CSS = `
     :host { all: initial; }
-    :host { --bg:#ffffff; --fg:#1f2328; --muted:#656d76; --border:rgba(31,35,40,.12); --hover:rgba(31,35,40,.06);
-      --accent:#4f46e5; --accent-soft:rgba(79,70,229,.10); --danger:#cf222e; --shadow:0 16px 40px rgba(15,23,42,.18), 0 2px 8px rgba(15,23,42,.08); }
+    :host { --bg:#ffffff; --fg:#171717; --muted:#525252; --faint:#737373; --border:rgba(23,23,23,.1); --hover:rgba(23,23,23,.05);
+      --shimmer:rgba(23,23,23,.1); --accent:#165e83; --accent-fg:#165e83; --danger:#dc2626; --ok:#15803d;
+      --shadow:0 12px 32px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.06); }
     @media (prefers-color-scheme: dark) {
-      :host { --bg:#23242a; --fg:#e8e8ea; --muted:#a0a4ab; --border:rgba(255,255,255,.12); --hover:rgba(255,255,255,.07);
-        --accent:#818cf8; --accent-soft:rgba(129,140,248,.14); --danger:#ff7b72; --shadow:0 16px 40px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.3); }
+      :host { --bg:#19191b; --fg:#ededed; --muted:#a1a1a6; --faint:#85858b; --border:rgba(237,237,237,.1); --hover:rgba(237,237,237,.06);
+        --shimmer:rgba(237,237,237,.12); --accent:#1d6f99; --accent-fg:#80bcda; --danger:#e5484d; --ok:#4cc38a;
+        --shadow:0 12px 32px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3); }
     }
     .card { position: fixed; z-index: 2147483647; box-sizing: border-box; width: min(460px, calc(100vw - 24px));
       max-height: min(62vh, 560px); display: flex; flex-direction: column; overflow: hidden;
       background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow);
       font: 14px/1.75 system-ui, "Segoe UI", "Yu Gothic UI", "Hiragino Sans", "Meiryo", sans-serif;
-      animation: pop .14s cubic-bezier(.2,.8,.3,1); }
-    @keyframes pop { from { opacity: 0; transform: translateY(4px) scale(.985); } }
-    .head { display: flex; align-items: center; gap: 6px; padding: 6px 6px 6px 12px; border-bottom: 1px solid var(--border);
+      animation: pop 200ms cubic-bezier(.22,1,.36,1); }
+    @keyframes pop { from { opacity: 0; transform: translateY(6px); } }
+    .head { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px; border-bottom: 1px solid var(--border);
       cursor: grab; user-select: none; }
     .head:active { cursor: grabbing; }
-    .brand { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .01em; }
+    .brand { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; color: var(--muted); }
     .logo { width: 18px; height: 18px; border-radius: 5px; background: var(--accent); color: #fff; display: grid; place-items: center;
-      font-size: 10.5px; font-weight: 700; }
+      font-size: 11px; font-weight: 600; }
     .dir { display: flex; align-items: center; gap: 4px; margin-left: 4px; font-size: 12px; color: var(--muted); }
-    select { all: unset; cursor: pointer; font-size: 12px; color: var(--fg); padding: 2px 18px 2px 7px; border-radius: 6px;
-      background: var(--hover) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 5px center; }
-    select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-    option { color: #1f2328; background: #fff; }
+    select { all: unset; cursor: pointer; font-size: 12px; color: var(--fg); padding: 2px 20px 2px 8px; border-radius: 6px;
+      background: var(--hover) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 6px center; }
+    select:focus-visible, button:focus-visible { outline: 2px solid var(--accent-fg); outline-offset: 2px; }
+    option { color: #171717; background: #fff; }
     .sp { flex: 1; }
-    button { all: unset; cursor: pointer; width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: var(--muted); }
+    button { all: unset; cursor: pointer; width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--muted);
+      transition: background-color 150ms cubic-bezier(.22,1,.36,1), color 150ms cubic-bezier(.22,1,.36,1); }
     button:hover { background: var(--hover); color: var(--fg); }
-    button.ok { color: #1a7f37; }
-    .body { padding: 11px 14px 12px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; cursor: text; }
-    .body.streaming::after { content: ""; display: inline-block; width: 7px; height: 1.05em; margin-left: 2px; vertical-align: -2px;
-      background: var(--accent); border-radius: 1px; animation: blink 1s steps(2) infinite; }
+    button.ok { color: var(--ok); }
+    .body { padding: 12px 16px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; cursor: text; }
+    .body.streaming::after { content: ""; display: inline-block; width: 6px; height: 1em; margin-left: 2px; vertical-align: -2px;
+      background: var(--accent-fg); border-radius: 1px; animation: blink 1s steps(2) infinite; }
     @keyframes blink { 50% { opacity: 0; } }
-    .sk { display: grid; gap: 8px; padding: 4px 0 2px; }
-    .sk i { display: block; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--hover) 25%, var(--accent-soft) 50%, var(--hover) 75%);
-      background-size: 300% 100%; animation: sh 1.2s ease-in-out infinite; }
+    .sk { display: grid; gap: 8px; padding: 4px 0; }
+    .sk i { display: block; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--hover) 25%, var(--shimmer) 50%, var(--hover) 75%);
+      background-size: 300% 100%; animation: sh 1.4s ease-in-out infinite; }
     .sk i:nth-child(2) { width: 82%; } .sk i:nth-child(3) { width: 58%; }
-    .sk-note { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .sk-note { font-size: 12px; color: var(--muted); margin-top: 4px; }
     @keyframes sh { from { background-position: 100% 0; } to { background-position: 0 0; } }
     .err { color: var(--danger); white-space: normal; }
-    .err a { color: var(--accent); cursor: pointer; text-decoration: underline; margin-left: 6px; }
-    .foot { display: flex; gap: 10px; padding: 5px 12px 6px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); }
+    .err a { color: var(--accent-fg); cursor: pointer; text-decoration: underline; margin-left: 8px; }
+    .foot { display: flex; gap: 12px; padding: 4px 12px 8px; border-top: 1px solid var(--border);
+      font: 11px/1.6 ui-monospace, "Cascadia Mono", Consolas, "Yu Gothic UI", monospace; font-variant-numeric: tabular-nums; color: var(--faint); }
     .foot:empty { display: none; }
   `;
 

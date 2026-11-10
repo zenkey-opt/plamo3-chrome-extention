@@ -1,12 +1,14 @@
 import { LANGS } from '../lib/langs.js';
 import { DEFAULTS, getSettings, saveSettings, parseGlossary } from '../lib/settings.js';
-import { MODELS, fmtBytes } from '../lib/models.js';
+import { MODELS, fmtBytes, licenseConsent, acceptLicense } from '../lib/models.js';
+import { internalPage } from '../lib/browser.js';
 
 const $ = (s) => document.querySelector(s);
 let settings;
 let savedTimer = 0;
 let last = null; // last status
 let busy = false; // an action button is running
+let consentFor = ''; // model whose download waits for the licence agreement
 
 const STATUS_TEXT = {
   checking: '確認中…',
@@ -64,6 +66,15 @@ async function init() {
   );
   $('#btnUnload').addEventListener('click', () => act('解放しています…', { type: 'unloadModel' }, () => '解放しました'));
   $('#dlCancel').addEventListener('click', () => act('', { type: 'cancelDownload' }, () => 'ダウンロードを中止しました'));
+  $('#consentOk').addEventListener('click', async () => {
+    const id = consentFor;
+    closeConsent();
+    await acceptLicense();
+    showConsent();
+    act('', { type: 'downloadModel', modelId: id }, () => '');
+  });
+  $('#consentCancel').addEventListener('click', closeConsent);
+  showConsent();
   $('#btnShortcuts').addEventListener('click', () => chrome.tabs.create({ url: 'chrome://extensions/shortcuts' }));
 
   const cmds = await chrome.commands.getAll();
@@ -87,7 +98,7 @@ function renderModels() {
         <input type="radio" name="model" value="${m.id}" />
         <span class="mtext"><span class="mname">PLaMo 3 Translate ${m.label}</span><span class="mnote">${m.note}</span></span>
       </label>
-      <span class="mstate">—</span>
+      <span class="mstate fig">—</span>
       <span class="mbtns">
         <button class="ghost small" data-act="download" hidden>ダウンロード</button>
         <button class="ghost small" data-act="delete" hidden>削除</button>
@@ -106,12 +117,32 @@ function renderModels() {
     b.addEventListener('click', () => {
       const id = b.closest('.model').dataset.id;
       if (b.dataset.act === 'download') {
-        act('', { type: 'downloadModel', modelId: id }, () => '');
-      } else if (confirm(`PLaMo 3 Translate ${MODELS[id].label} を削除しますか？（再度使うにはダウンロードが必要です）`)) {
+        startDownload(id);
+      } else if (confirm(`PLaMo 3 Translate ${MODELS[id].label} を削除しますか？もう一度使うには、ダウンロードし直す必要があります。`)) {
         act('削除しています…', { type: 'deleteModel', modelId: id }, () => '削除しました');
       }
     });
   }
+}
+
+// Download needs the licence agreement once (per licence revision); the panel asks for it in place.
+async function startDownload(id) {
+  if (await licenseConsent()) return act('', { type: 'downloadModel', modelId: id }, () => '');
+  consentFor = id;
+  $('#consentModel').textContent = `PLaMo 3 Translate ${MODELS[id].label} `;
+  $('#consent').hidden = false;
+  $('#consentOk').focus();
+}
+
+function closeConsent() {
+  $('#consent').hidden = true;
+  consentFor = '';
+}
+
+async function showConsent() {
+  const c = await licenseConsent();
+  const day = c ? new Date(c.at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+  $('#consentState').textContent = c ? `この契約には ${day}に同意しました。` : '';
 }
 
 function showModels(s) {
@@ -147,13 +178,13 @@ function showDownload(s) {
   box.hidden = false;
   const name = MODELS[d.id]?.label || d.id;
   if (d.state === 'error') {
-    $('#dlBar').style.width = '0%';
+    $('#dlBar').style.transform = 'scaleX(0)';
     $('#dlText').innerHTML = `<span class="bad">${escapeHtml(name)} のダウンロードに失敗しました: ${escapeHtml(d.error?.message || '')}</span>`;
     $('#dlCancel').hidden = true;
     return;
   }
   const pct = d.total ? (d.done / d.total) * 100 : 0;
-  $('#dlBar').style.width = pct.toFixed(1) + '%';
+  $('#dlBar').style.transform = `scaleX(${(pct / 100).toFixed(4)})`;
   const parts = [`${name}: ${fmtBytes(d.done)} / ${fmtBytes(d.total)}（${pct.toFixed(0)}%）`];
   if (d.bps > 0) {
     parts.push(`${(d.bps / 1048576).toFixed(1)} MB/s`);
@@ -177,7 +208,7 @@ function showStatus(s) {
     $('#stBackend').textContent = `${s.info.backend}${s.info.gpu ? `（${s.info.gpu}）` : ''}${s.info.offloaded ? ` · GPU に ${s.info.offloaded} 層` : ''}`;
     $('#stBuild').textContent = `${s.info.libllama}（wllama・WebGPU）· コンテキスト ${s.info.nCtx} · ${s.info.slots} 並列 · 読み込み ${(s.info.loadMs / 1000).toFixed(1)} 秒`;
   } else {
-    $('#stBackend').textContent = !known ? '—' : s.webgpu ? 'WebGPU（モデル読み込み時に使用）' : 'WebGPU 非対応のブラウザです（CPU で実行・低速）';
+    $('#stBackend').textContent = !known ? '—' : s.webgpu ? 'WebGPU（モデル読み込み時に使用）' : `このブラウザでは WebGPU が使えません（CPU で実行するため低速です）。${internalPage('gpu')} で確認できます。`;
     $('#stBuild').textContent = '—';
   }
   $('#stStorage').textContent = s.storageUsed != null ? fmtBytes(s.storageUsed) : '—';
@@ -223,7 +254,7 @@ async function refresh() {
       const alive = await ask({ type: 'ping' }, 3000).then(() => true, () => false);
       message = alive
         ? '翻訳エンジンが応答しません（8 秒以上）。'
-        : '拡張機能のバックグラウンド処理が応答しません。chrome://extensions でこの拡張機能を再読み込みしてください。';
+        : `拡張機能のバックグラウンド処理が応答しません。${internalPage('extensions')} でこの拡張機能を再読み込みしてください。`;
     }
     showStatus({ state: 'error', error: { message } });
   } finally {
@@ -280,7 +311,8 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
-// the page-mode toggle also lives in the popup / page pill
+// the page-mode toggle also lives in the popup / page pill; the consent can be given in another options tab
 chrome.storage.onChanged.addListener((ch, area) => {
   if (area === 'local' && ch.pageMode) setSeg('#pageMode', ch.pageMode.newValue);
+  if (area === 'local' && ch.licenseConsent) showConsent();
 });

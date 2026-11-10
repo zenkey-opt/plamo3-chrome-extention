@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "PLaMo 3 Translate Local",
   "short_name": "PLaMo3 翻訳",
-  "version": "0.2.2",
-  "description": "PLaMo 3 Translate をブラウザ内（WebGPU）で動かして、選択テキスト・ページ・入力文を翻訳します。サーバー不要・原文は外部に送りません（非公式）。Built with PLaMo",
+  "version": "0.2.3",
+  "description": "PLaMo 3 Translate をブラウザ内（WebGPU）で動かして、選択テキスト・ページ・入力文を翻訳します。サーバーは不要で、原文を外部に送りません（非公式）。Built with PLaMo",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoM7KB/YN2ZLsvj/5dXJn9aiBManFAsoKoB1o3qYCqg7EgjKGEw+4+oJmdhG4ajOZ4IBvtjAF/WVJfPXa126S6b26b/QB5VypNcXdHOd6URcLj4U3u1dHSZUdVXFaLf3G4pCkANZYyHNkp0rbiIm0nEaK+O76P4DdG6H/Q0psbs1ivQ0L0QIGodQBJcH1eWalR1T7HV11vAOdOaTRXLgll+afNfuyFAFN9zzigZjhvLM/wpgmhrJxa4eKAC7Hz2WZ1McxIiN1Hgq6WPZBXR6ow4VqQUXbj97rAnzh/akpOGgnBlM5WF0O/J5VB5gv6KYjvYy94MbXdxVATyVlSjb0FwIDAQAB",
   "minimum_chrome_version": "137",
   "permissions": [

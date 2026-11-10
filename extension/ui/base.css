@@ -1,50 +1,58 @@
-/* Shared look for extension pages (popup, options). */
+/* Shared look for extension pages (popup, options, licence page).
+   Graphite neutrals; one accent, 藍 (#165e83), for the primary action, the selection, links and focus. */
 :root {
-  --bg: #ffffff;
-  --bg-soft: #f6f7f9;
-  --fg: #1f2328;
-  --muted: #656d76;
-  --faint: #8b929a;
-  --border: rgba(31, 35, 40, 0.12);
-  --border-strong: rgba(31, 35, 40, 0.2);
-  --hover: rgba(31, 35, 40, 0.06);
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
-  --accent-soft: rgba(79, 70, 229, 0.1);
-  --accent-fg: #4338ca;
-  --ok: #1a7f37;
-  --warn: #bf8700;
-  --danger: #cf222e;
-  --info: #0969da;
-  --radius: 10px;
+  --bg: #ffffff;            /* surfaces: cards, the popup */
+  --bg-soft: #fafafa;       /* the page behind cards, bars */
+  --raised: #f4f4f5;
+  --fg: #171717;
+  --muted: #525252;         /* secondary text */
+  --faint: #737373;         /* meta and captions, 4.7:1 on white */
+  --border: rgba(23, 23, 23, 0.1);
+  --border-strong: rgba(23, 23, 23, 0.18);
+  --hover: rgba(23, 23, 23, 0.05);
+  --accent: #165e83;        /* 藍色: fills */
+  --accent-hover: #124d6b;
+  --accent-soft: rgba(22, 94, 131, 0.08);
+  --accent-fg: #165e83;     /* the accent as text and lines */
+  --on-accent: #ffffff;
+  --ok: #15803d;
+  --warn: #b45309;
+  --danger: #dc2626;
+  --radius: 12px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --font: system-ui, "Segoe UI", "Yu Gothic UI", "Hiragino Sans", "Meiryo", sans-serif;
+  /* figures (seconds, tok/s, GB) are set in a mono face everywhere; kana and kanji fall back to the UI font */
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "Yu Gothic UI", "Hiragino Sans", monospace;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1d1e23;
-    --bg-soft: #25262c;
-    --fg: #e8e8ea;
-    --muted: #a0a4ab;
-    --faint: #7d828a;
-    --border: rgba(255, 255, 255, 0.1);
-    --border-strong: rgba(255, 255, 255, 0.18);
-    --hover: rgba(255, 255, 255, 0.07);
-    --accent: #6366f1;
-    --accent-hover: #818cf8;
-    --accent-soft: rgba(129, 140, 248, 0.16);
-    --accent-fg: #c7d2fe;
-    --ok: #3fb950;
+    --bg: #19191b;
+    --bg-soft: #141415;
+    --raised: #232325;
+    --fg: #ededed;
+    --muted: #a1a1a6;
+    --faint: #85858b;
+    --border: rgba(237, 237, 237, 0.09);
+    --border-strong: rgba(237, 237, 237, 0.16);
+    --hover: rgba(237, 237, 237, 0.06);
+    --accent: #1d6f99;
+    --accent-hover: #2580ae;
+    --accent-soft: rgba(128, 188, 218, 0.12);
+    --accent-fg: #80bcda;
+    --ok: #4cc38a;
     --warn: #d29922;
-    --danger: #ff7b72;
-    --info: #58a6ff;
+    --danger: #e5484d;
   }
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.6 var(--font); }
 button, select, textarea, input { font: inherit; color: inherit; }
+a { color: var(--accent-fg); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.fig { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
 kbd {
-  font: 10.5px/1 var(--font);
+  font: 11px/1 var(--font);
   padding: 2px 4px;
   border: 1px solid var(--border-strong);
   border-bottom-width: 2px;
@@ -56,39 +64,43 @@ kbd {
   cursor: pointer;
   width: 28px;
   height: 28px;
-  border-radius: 7px;
+  border-radius: 8px;
   display: grid;
   place-items: center;
   color: var(--muted);
   flex: none;
+  transition: background-color 150ms var(--ease), color 150ms var(--ease);
 }
 .icon:hover:not(:disabled) { background: var(--hover); color: var(--fg); }
-.icon:disabled { opacity: 0.35; cursor: default; }
-.icon:focus-visible, select:focus-visible, .primary:focus-visible, .seg button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+.icon:disabled { opacity: 0.4; cursor: default; }
+.icon:focus-visible, select:focus-visible, .primary:focus-visible, .ghost:focus-visible, .seg button:focus-visible,
+.status:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent-fg);
+  outline-offset: 2px;
 }
+/* the mark: 訳 on 藍, as in the toolbar icon */
 .logo {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   display: grid;
   place-items: center;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   flex: none;
 }
 select {
   appearance: none;
   cursor: pointer;
   border: 1px solid transparent;
-  border-radius: 7px;
-  padding: 4px 24px 4px 9px;
-  background: var(--hover)
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E")
+  border-radius: 8px;
+  padding: 4px 24px 4px 8px;
+  background: var(--raised)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")
     no-repeat right 8px center;
+  transition: border-color 150ms var(--ease);
 }
 select:hover { border-color: var(--border-strong); }
 option { background: var(--bg); color: var(--fg); }
@@ -96,43 +108,51 @@ option { background: var(--bg); color: var(--fg); }
   all: unset;
   cursor: pointer;
   text-align: center;
-  padding: 7px 14px;
+  padding: 6px 16px;
   border-radius: 8px;
   background: var(--accent);
-  color: #fff;
-  font-weight: 600;
+  color: var(--on-accent);
+  font-weight: 500;
+  transition: background-color 150ms var(--ease), transform 150ms var(--ease);
 }
 .primary:hover { background: var(--accent-hover); }
-.primary[data-on="true"] { background: var(--bg-soft); color: var(--fg); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.primary:active:not(:disabled) { transform: scale(0.98); }
+.primary[data-on="true"] { background: var(--raised); color: var(--fg); box-shadow: inset 0 0 0 1px var(--border-strong); }
 .primary:disabled { opacity: 0.45; cursor: default; }
 .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; flex: none; }
-.seg button { all: unset; cursor: pointer; padding: 6px 11px; color: var(--muted); font-size: 12.5px; }
+.seg button {
+  all: unset;
+  cursor: pointer;
+  padding: 4px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  transition: background-color 150ms var(--ease), color 150ms var(--ease);
+}
 .seg button + button { border-left: 1px solid var(--border); }
-.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-fg); font-weight: 600; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-fg); font-weight: 500; }
 .seg button:hover { color: var(--fg); }
+/* engine state: a dot and a word; it only looks like a control when it opens something */
 .status {
   all: unset;
   cursor: default;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  font-size: 11.5px;
+  gap: 8px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
   color: var(--muted);
-  background: var(--hover);
   white-space: nowrap;
+  transition: background-color 150ms var(--ease), color 150ms var(--ease);
 }
 .status[data-action="options"] { cursor: pointer; }
-.status[data-action="options"]:hover { color: var(--fg); }
-.status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+.status[data-action="options"]:hover { background: var(--hover); color: var(--fg); }
+.status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); flex: none; }
 .status[data-state="ready"] .dot { background: var(--ok); }
-.status[data-state="sleeping"] .dot,
-.status[data-state="idle"] .dot { background: var(--info); }
 .status[data-state="starting"] .dot,
 .status[data-state="loading"] .dot,
 .status[data-state="downloading"] .dot,
-.status[data-state="checking"] .dot { background: var(--warn); animation: pulse 1s ease-in-out infinite; }
+.status[data-state="checking"] .dot { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
 .status[data-state="nomodel"] .dot { background: var(--warn); }
 .status[data-state="down"] .dot,
 .status[data-state="error"] .dot { background: var(--danger); }

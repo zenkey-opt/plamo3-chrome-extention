@@ -6,7 +6,7 @@
 import { buildPrompt, relevantGlossary, cleanOutput } from './lib/pfml.js';
 import { DEFAULTS, OBSOLETE_KEYS, getSettings, onSettingsChanged, parseGlossary } from './lib/settings.js';
 import { LANGS, looksJapanese, normalizeLang } from './lib/langs.js';
-import { MODELS, DEFAULT_MODEL } from './lib/models.js';
+import { MODELS, DEFAULT_MODEL, licenseConsent } from './lib/models.js';
 import { modelStatus, deleteModel } from './lib/store.js';
 
 const OFFSCREEN_URL = 'offscreen/engine.html';
@@ -554,7 +554,7 @@ async function getStatus() {
     info: eng?.state === 'ready' ? eng.info : null,
     // Not called "error": the pages read { error } as "this request failed" (see errorPayload).
     engineError: engineHung
-      ? { code: 'ENGINE_HUNG', message: '翻訳エンジンが応答しません。「解放して VRAM を空ける」で作り直せます。' }
+      ? { code: 'ENGINE_HUNG', message: '翻訳エンジンが応答しません。設定画面の「解放して VRAM を空ける」を押すと、エンジンを作り直せます。' }
       : eng?.state === 'error'
         ? eng.error || null
         : null,
@@ -591,6 +591,10 @@ async function unloadModelNow() {
 
 async function downloadModel(modelId) {
   if (!MODELS[modelId]) throw new TranslateError('BAD_MODEL', '不明なモデルです');
+  // the options page asks for the agreement first; this keeps every other caller from skipping it
+  if (!(await licenseConsent())) {
+    throw new TranslateError('LICENSE_NOT_ACCEPTED', 'ダウンロードするには、PLaMo コミュニティライセンス契約への同意が必要です。');
+  }
   await engineCall('download', { modelId });
   return getStatus();
 }

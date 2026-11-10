@@ -38,7 +38,7 @@ const STATUS_TEXT = {
   idle: '待機中',
   loading: 'モデル読み込み中…',
   downloading: 'ダウンロード中…',
-  nomodel: 'モデル未取得',
+  nomodel: 'モデル未ダウンロード',
   error: 'エラー',
 };
 
@@ -267,9 +267,9 @@ function setStatus(s) {
   el.status.dataset.action = ['nomodel', 'error', 'downloading'].includes(state) ? 'options' : '';
   const lines = [];
   if (s.info) lines.push(`${s.info.backend}${s.info.gpu ? `（${s.info.gpu}）` : ''} · 読み込み ${(s.info.loadMs / 1000).toFixed(1)} 秒`);
-  if (state === 'idle') lines.push('モデルは未読み込み。次の翻訳で自動的に読み込みます（数秒）。');
+  if (state === 'idle') lines.push('モデルはまだ読み込まれていません。次の翻訳で自動的に読み込みます（数秒）。');
   if (state === 'nomodel') lines.push('翻訳モデルがまだダウンロードされていません。クリックで設定画面を開きます。');
-  if (state === 'downloading') lines.push('クリックで設定画面（進み具合）を開きます。');
+  if (state === 'downloading') lines.push('クリックすると、進み具合を表示する設定画面を開きます。');
   const err = s.engineError || s.error;
   if (state === 'error' && err) lines.push(err.message);
   if (s.queue && (s.queue.active || s.queue.pending)) lines.push(`処理中 ${s.queue.active} / 待ち ${s.queue.pending}`);

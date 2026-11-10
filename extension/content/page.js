@@ -788,37 +788,44 @@
     let host = null;
     let els = null;
     let hideTimer = 0;
+    // graphite neutrals and the 藍 accent of the extension pages (ui/base.css), inside a shadow root
     const css = `
       :host { all: initial; }
       [hidden] { display: none !important; }
-      .pill { position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; display: flex; align-items: center; gap: 10px;
-        padding: 7px 8px 7px 12px; border-radius: 999px; font: 12.5px/1.4 system-ui, "Segoe UI", "Yu Gothic UI", "Meiryo", sans-serif;
+      .pill { position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; display: flex; align-items: center; gap: 8px;
+        padding: 4px 4px 4px 8px; border-radius: 12px; font: 12px/1.4 system-ui, "Segoe UI", "Yu Gothic UI", "Meiryo", sans-serif;
         color: var(--fg); background: var(--bg); border: 1px solid var(--border);
-        box-shadow: 0 8px 24px rgba(0,0,0,.16), 0 1px 3px rgba(0,0,0,.08); transition: opacity .2s, transform .2s; user-select: none; }
-      .pill.min { padding: 0; gap: 0; }
+        box-shadow: 0 8px 24px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.06);
+        transition: opacity 200ms cubic-bezier(.22,1,.36,1), transform 200ms cubic-bezier(.22,1,.36,1); user-select: none; }
+      .pill.min { padding: 0; gap: 0; border-radius: 10px; }
       .pill.min > :not(.badge) { display: none; }
-      .badge { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--accent);
-        color: #fff; font-size: 11.5px; font-weight: 700; flex: none; cursor: default; }
-      .pill.min .badge { width: 34px; height: 34px; font-size: 14px; cursor: pointer; }
-      .pill.min.busy .badge { animation: pulse 1.1s ease-in-out infinite; }
-      @keyframes pulse { 50% { box-shadow: 0 0 0 6px var(--accent-soft); } }
-      .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--track); border-top-color: var(--accent);
+      .badge { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; background: var(--accent);
+        color: #fff; font-size: 12px; font-weight: 600; flex: none; cursor: default; }
+      .pill.min .badge { width: 32px; height: 32px; border-radius: 9px; font-size: 15px; cursor: pointer; }
+      .pill.min.busy .badge { animation: busy 1.6s ease-in-out infinite; }
+      @keyframes busy { 50% { opacity: .55; } }
+      .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--track); border-top-color: var(--accent-fg);
         animation: spin .8s linear infinite; flex: none; }
       @keyframes spin { to { transform: rotate(360deg); } }
-      .msg { white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+      .msg { white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
       .msg.err { color: var(--danger); white-space: normal; }
-      .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
-      .seg button, .btn { all: unset; cursor: pointer; padding: 3px 10px; font-size: 12px; color: var(--muted); }
-      .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-fg); font-weight: 600; }
-      .btn { border-radius: 999px; color: var(--fg); background: var(--chip); }
-      .btn:hover, .seg button:hover { color: var(--fg); }
-      .x { all: unset; cursor: pointer; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); }
+      .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+      .seg button, .btn { all: unset; cursor: pointer; padding: 4px 12px; font-size: 12px; color: var(--muted);
+        transition: background-color 150ms cubic-bezier(.22,1,.36,1), color 150ms cubic-bezier(.22,1,.36,1); }
+      .seg button + button { border-left: 1px solid var(--border); }
+      .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-fg); font-weight: 500; }
+      .btn { border-radius: 8px; color: var(--fg); background: var(--chip); }
+      .btn:hover { background: var(--chip-hover); }
+      .seg button:hover { color: var(--fg); }
+      .x { all: unset; cursor: pointer; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; color: var(--muted);
+        transition: background-color 150ms cubic-bezier(.22,1,.36,1), color 150ms cubic-bezier(.22,1,.36,1); }
       .x:hover { background: var(--chip); color: var(--fg); }
-      :host { --bg: #ffffff; --fg: #1f2328; --muted: #656d76; --border: rgba(31,35,40,.12); --chip: rgba(31,35,40,.06);
-        --accent: #4f46e5; --accent-soft: rgba(79,70,229,.12); --accent-fg: #4338ca; --track: rgba(79,70,229,.2); --danger: #cf222e; }
+      button:focus-visible, .badge:focus-visible { outline: 2px solid var(--accent-fg); outline-offset: 2px; }
+      :host { --bg: #ffffff; --fg: #171717; --muted: #525252; --border: rgba(23,23,23,.1); --chip: rgba(23,23,23,.06); --chip-hover: rgba(23,23,23,.1);
+        --accent: #165e83; --accent-soft: rgba(22,94,131,.08); --accent-fg: #165e83; --track: rgba(22,94,131,.2); --danger: #dc2626; }
       @media (prefers-color-scheme: dark) {
-        :host { --bg: #23242a; --fg: #e8e8ea; --muted: #a0a4ab; --border: rgba(255,255,255,.12); --chip: rgba(255,255,255,.08);
-          --accent: #6366f1; --accent-soft: rgba(129,140,248,.18); --accent-fg: #c7d2fe; --track: rgba(129,140,248,.25); --danger: #ff7b72; }
+        :host { --bg: #19191b; --fg: #ededed; --muted: #a1a1a6; --border: rgba(237,237,237,.1); --chip: rgba(237,237,237,.08); --chip-hover: rgba(237,237,237,.13);
+          --accent: #1d6f99; --accent-soft: rgba(128,188,218,.12); --accent-fg: #80bcda; --track: rgba(128,188,218,.25); --danger: #e5484d; }
       }`;
     function show() {
       if (host) return;
@@ -836,7 +843,7 @@
           <button class="btn retry" hidden>再試行</button>
           <button class="btn off">原文に戻す</button>
           <button class="x" title="最小化" aria-label="最小化">
-            <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 6h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 6h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           </button>
         </div>`;
       els = {

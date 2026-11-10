@@ -22,6 +22,22 @@ export const MODELS = Object.freeze({
 
 export const DEFAULT_MODEL = '2b-q4km';
 
+// The licence the models are published under (its copy lives in licenses/). Bump `rev` together with that
+// copy: a changed licence has to be agreed to again before the next download.
+export const MODEL_LICENSE = Object.freeze({ name: 'PLaMo コミュニティライセンス契約', rev: '2026-11-09' });
+
+/** The stored agreement to the current licence revision ({ rev, at }), or null. */
+export async function licenseConsent() {
+  const { licenseConsent: c } = await chrome.storage.local.get('licenseConsent');
+  return c && c.rev === MODEL_LICENSE.rev ? c : null;
+}
+
+export async function acceptLicense() {
+  const c = { rev: MODEL_LICENSE.rev, at: new Date().toISOString() };
+  await chrome.storage.local.set({ licenseConsent: c });
+  return c;
+}
+
 export const modelUrl = (m) => `https://huggingface.co/${m.repo}/resolve/main/${m.file}`;
 export const modelPage = (m) => `https://huggingface.co/${m.repo}`;
 

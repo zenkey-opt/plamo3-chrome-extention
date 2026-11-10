@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <title>PLaMo 3 Translate Local — 設定</title>
+  <title>PLaMo 3 Translate Local の設定</title>
   <link rel="stylesheet" href="../ui/base.css" />
   <link rel="stylesheet" href="options.css" />
 </head>
@@ -12,7 +12,8 @@
       <span class="logo big">訳</span>
       <div>
         <h1>PLaMo 3 Translate Local</h1>
-        <p class="sub">PFN の翻訳特化 LLM「PLaMo 3 Translate」を、ブラウザの中（WebGPU）で動かして翻訳します。サーバーは不要で、訳文も原文も外部に送信しません。<span class="unofficial">非公式拡張</span><span class="unofficial">Built with PLaMo</span></p>
+        <p class="sub">PFN の翻訳特化 LLM「PLaMo 3 Translate」を、ブラウザの中（WebGPU）で動かして翻訳します。サーバーは不要で、訳文も原文も外部に送信しません。</p>
+        <p class="byline">非公式の拡張機能 · Built with PLaMo</p>
       </div>
     </header>
 
@@ -24,17 +25,31 @@
         <div class="k">実行環境</div>
         <div class="v" id="stBackend">—</div>
         <div class="k">llama.cpp</div>
-        <div class="v" id="stBuild">—</div>
+        <div class="v fig" id="stBuild">—</div>
         <div class="k">保存領域の使用量</div>
-        <div class="v" id="stStorage">—</div>
+        <div class="v fig" id="stStorage">—</div>
       </div>
 
       <div class="models" id="models" role="radiogroup" aria-label="使用するモデル"></div>
 
+      <div class="consent" id="consent" role="region" aria-labelledby="consentTitle" hidden>
+        <p class="consent-title" id="consentTitle"><span id="consentModel"></span>をダウンロードする前に</p>
+        <p id="consentText">モデルは Preferred Networks が PLaMo コミュニティライセンス契約で公開しています。ダウンロードして使うと、この契約が適用されます。</p>
+        <ul id="consentPoints">
+          <li>私的使用と学術用途なら、無償で登録も要りません。</li>
+          <li>事業で使う場合（組織の中での利用を含む）は、事前の登録が必要です。直近の事業年度の収入・売上が 10 億円を超える場合は、PFN との別の契約が必要です。</li>
+        </ul>
+        <div class="actions">
+          <button id="consentOk" class="primary" aria-describedby="consentText consentPoints">同意してダウンロード</button>
+          <button id="consentCancel" class="ghost">キャンセル</button>
+          <a href="../licenses/index.html" target="_blank">契約の要点と全文</a>
+        </div>
+      </div>
+
       <div class="dl" id="dl" hidden>
         <div class="bar"><span id="dlBar"></span></div>
         <div class="dlrow">
-          <span id="dlText"></span>
+          <span id="dlText" class="fig"></span>
           <button id="dlCancel" class="ghost small">中止</button>
         </div>
       </div>
@@ -53,7 +68,7 @@
         </div>
       </div>
       <p class="hint">モデルは Hugging Face の公式リポジトリ（pfnet）から一度だけダウンロードし、この拡張機能専用の保存領域に置きます。翻訳はこの PC の GPU（WebGPU）で実行します。</p>
-      <p class="hint">モデルは Preferred Networks が<a href="../licenses/index.html" target="_blank">PLaMo コミュニティライセンス契約</a>で公開しているもので、ダウンロードして使うとこの契約が適用されます。事業での利用（組織の中での利用を含む）には事前の登録が必要です。</p>
+      <p class="hint">モデルは Preferred Networks が <a href="../licenses/index.html" target="_blank">PLaMo コミュニティライセンス契約</a>で公開しているもので、ダウンロードして使うとこの契約が適用されます。<span id="consentState"></span></p>
     </section>
 
     <section class="card">
@@ -91,7 +106,7 @@
         <div class="field">
           <label for="concurrency">同時に翻訳する数</label>
           <input id="concurrency" type="number" min="1" max="8" step="1" />
-          <p class="hint">1〜8。まとめて処理するほど速くなります（GPU の負荷は上がります）。</p>
+          <p class="hint">1〜8。まとめて処理するほど速くなりますが、GPU の負荷は上がります。</p>
         </div>
         <div class="field">
           <label>&nbsp;</label>
@@ -106,7 +121,7 @@
 
     <section class="card">
       <h2>用語集</h2>
-      <p class="hint">1 行に 1 語、<code>原語 = 訳語</code> の形式。原文に含まれる語だけがモデルに渡されます。</p>
+      <p class="hint">1 行に 1 語ずつ、<code>原語 = 訳語</code> の形で書きます。モデルに渡すのは、原文に含まれる語だけです。</p>
       <textarea id="glossary" rows="6" spellcheck="false" placeholder="PLaMo = PLaMo&#10;dashboard = 管理画面&#10;# で始まる行はコメント"></textarea>
     </section>
 
@@ -120,7 +135,7 @@
       </div>
       <div class="actions">
         <button id="btnShortcuts" class="ghost">ショートカットを変更</button>
-        <span class="hint">選択翻訳キーは、何も選択していなければページ翻訳を切り替えます。右クリックメニューからも使えます。</span>
+        <span class="hint">選択翻訳キーは、何も選択していなければページ翻訳を切り替えます。どちらの操作も右クリックメニューから使えます。</span>
       </div>
     </section>
 
