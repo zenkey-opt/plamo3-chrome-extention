@@ -11,7 +11,12 @@ export const DEFAULTS = Object.freeze({
   concurrency: 8,           // parallel requests (the engine has 8 slots)
   useTitleContext: true,    // pass the page title as translation context
   glossary: '',             // one "source = target" per line
+  autoPage: 'off',          // pages in another language: 'off' | 'ask' (offer page translation) | 'auto' (start it)
+  autoPageSkip: '',         // sites autoPage leaves alone: one host per line, subdomains included
 });
+
+// autoPage needs the optional access to every site (content/detect.js runs on each page)
+export const AUTO_ORIGINS = ['http://*/*', 'https://*/*'];
 
 // keys used by the old local-server version (0.1.x); removed on update
 export const OBSOLETE_KEYS = ['serverUrl', 'autoStart'];
@@ -43,4 +48,31 @@ export function parseGlossary(text) {
     if (m && m[1].trim() && m[2].trim()) out.push({ source: m[1].trim(), target: m[2].trim() });
   }
   return out;
+}
+
+// autoPageSkip text -> hosts. Accepts a bare host or a pasted URL ("https://example.com/path" -> example.com).
+export function parseSites(text) {
+  const out = [];
+  for (const raw of String(text || '').split(/\r?\n/)) {
+    let h = raw.trim().toLowerCase();
+    if (!h || h.startsWith('#')) continue;
+    h = h.replace(/^[a-z][a-z0-9+.-]*:\/\//, '').replace(/[/?#].*$/, '').replace(/:\d+$/, '').replace(/^\*\./, '').replace(/\.$/, '');
+    if (h) out.push(h);
+  }
+  return out;
+}
+
+const coveredBy = (host, site) => host === site || host.endsWith('.' + site);
+
+export function siteSkipped(host, text) {
+  const h = String(host || '').toLowerCase();
+  return !!h && parseSites(text).some((site) => coveredBy(h, site));
+}
+
+// add the host to the list, or drop every line that covers it
+export function toggleSite(text, host, skip) {
+  const h = String(host || '').toLowerCase();
+  const lines = String(text || '').split(/\r?\n/).filter((l) => l.trim());
+  if (skip) return siteSkipped(h, text) ? lines.join('\n') : [...lines, h].join('\n');
+  return lines.filter((l) => !parseSites(l).some((site) => coveredBy(h, site))).join('\n');
 }

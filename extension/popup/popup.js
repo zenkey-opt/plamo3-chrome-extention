@@ -1,5 +1,5 @@
 import { LANGS, langName } from '../lib/langs.js';
-import { getSettings, saveSettings } from '../lib/settings.js';
+import { getSettings, saveSettings, siteSkipped } from '../lib/settings.js';
 
 const $ = (s) => document.querySelector(s);
 const isWindow = new URLSearchParams(location.search).has('window');
@@ -17,6 +17,9 @@ const el = {
   meta: $('#meta'),
   copy: $('#copy'),
   pageBtn: $('#pageBtn'),
+  siteRow: $('#siteRow'),
+  siteSkip: $('#siteSkip'),
+  siteSkipText: $('#siteSkipText'),
   seg: [...document.querySelectorAll('.seg button')],
   model: $('#model'),
   keys: $('#keys'),
@@ -297,6 +300,14 @@ async function refreshPage() {
     el.pageBtn.disabled = true;
     el.pageBtn.title = 'このページでは使えません';
     return;
+  }
+  // 外国語のページを開いたとき: per-site exclusion for this tab's site
+  const host = /^https?:/.test(url) ? new URL(url).hostname : '';
+  if (host && (settings.autoPage === 'ask' || settings.autoPage === 'auto')) {
+    el.siteSkipText.textContent = settings.autoPage === 'auto' ? 'このサイトでは自動で翻訳しない' : 'このサイトでは尋ねない';
+    el.siteSkip.checked = siteSkipped(host, settings.autoPageSkip);
+    el.siteSkip.onchange = () => chrome.runtime.sendMessage({ type: 'autoPageSkip', host, skip: el.siteSkip.checked });
+    el.siteRow.hidden = false;
   }
   const st = await chrome.runtime.sendMessage({ type: 'pageState', tabId: tab.id });
   pageActive = !!st?.active;

@@ -102,6 +102,22 @@
           <button data-v="bilingual">併記（原文の下に訳文）</button>
         </div>
       </div>
+      <div class="field">
+        <label id="autoPageLabel">外国語のページを開いたとき</label>
+        <div class="seg" id="autoPage" role="group" aria-labelledby="autoPageLabel">
+          <button data-v="off">何もしない</button>
+          <button data-v="ask">翻訳するか尋ねる</button>
+          <button data-v="auto">自動で翻訳する</button>
+        </div>
+        <p class="hint">翻訳先と違う言語のページが対象です。ページの言語を調べるため、すべてのサイトへのアクセス許可を求めます。判定はこの PC の中で行い、ページの内容は外部に送りません。「何もしない」に戻すと、この許可も外します。</p>
+        <p class="hint warn" id="autoPageWarn" role="status" hidden></p>
+      </div>
+      <div class="field" id="autoPageMore" hidden>
+        <label for="autoPageSkip">対象外のサイト</label>
+        <textarea id="autoPageSkip" rows="3" spellcheck="false" placeholder="example.com" aria-describedby="autoPageSkipHint"></textarea>
+        <p class="hint" id="autoPageSkipHint">1 行に 1 サイトずつ書きます。サブドメインも対象外になります。ここに書いたサイトでも、手動の翻訳は使えます。</p>
+        <p class="hint" id="autoPageBrowser"></p>
+      </div>
       <div class="row2">
         <div class="field">
           <label for="concurrency">同時に翻訳する数</label>

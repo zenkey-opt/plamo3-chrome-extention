@@ -4,8 +4,8 @@
 // the cache and the UI plumbing for the popup, the selection card and the page translator.
 
 import { buildPrompt, relevantGlossary, cleanOutput } from './lib/pfml.js';
-import { DEFAULTS, OBSOLETE_KEYS, getSettings, onSettingsChanged, parseGlossary } from './lib/settings.js';
-import { LANGS, looksJapanese, normalizeLang } from './lib/langs.js';
+import { DEFAULTS, OBSOLETE_KEYS, AUTO_ORIGINS, getSettings, onSettingsChanged, parseGlossary, siteSkipped, toggleSite } from './lib/settings.js';
+import { LANGS, LANG_NAME, looksJapanese, normalizeLang } from './lib/langs.js';
 import { MODELS, DEFAULT_MODEL, licenseConsent } from './lib/models.js';
 import { modelStatus, deleteModel } from './lib/store.js';
 
@@ -16,14 +16,18 @@ let glossary = [];
 const settingsReady = getSettings().then((s) => applySettings(s));
 onSettingsChanged(applySettings);
 
+// settings that do not change any translation (the cache survives them)
+const NOT_FOR_CACHE = new Set(['autoPage', 'autoPageSkip']);
+
 function applySettings(s, changes) {
   const prevModel = settings.model;
   settings = s;
   glossary = parseGlossary(s.glossary);
   queue.setLimit(Math.max(1, Math.min(8, Number(s.concurrency) || 8)));
-  cache.clear();
+  if (!changes || Object.keys(changes).some((k) => !NOT_FOR_CACHE.has(k))) cache.clear();
   if (changes?.idleUnloadMin) engineConfig();
   if (changes?.model && prevModel !== s.model) engineUnloadIfLoaded();
+  if (changes?.autoPage) syncDetector();
 }
 
 const currentModel = () => MODELS[settings.model] || MODELS[DEFAULT_MODEL];
@@ -646,6 +650,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const tab = await chrome.tabs.get(msg.tabId);
         return togglePage(tab, msg.force);
       }
+      case 'autoPage':
+        // content/detect.js: this page is not in the target language
+        return sender.tab && sender.frameId === 0 ? autoPage(sender.tab, msg.lang) : undefined;
+      case 'autoPageSkip': {
+        await settingsReady;
+        const autoPageSkip = toggleSite(settings.autoPageSkip, msg.host, !!msg.skip);
+        await chrome.storage.local.set({ autoPageSkip });
+        return { ok: true, autoPageSkip };
+      }
       case 'setPageMode': {
         await chrome.storage.local.set({ pageMode: msg.mode });
         try {
@@ -690,14 +703,15 @@ async function queryPageState(tabId) {
   }
 }
 
-async function togglePage(tab, force) {
+// pageLang: the page language when the caller already knows it (content/detect.js)
+async function togglePage(tab, force, pageLang) {
   await settingsReady;
   try {
     await inject(tab.id, ['content/page.js']);
   } catch (e) {
     return { error: { code: 'NO_ACCESS', message: 'このページでは翻訳できません（ブラウザの内部ページ・ストア・PDF など）。' } };
   }
-  const r = await chrome.tabs.sendMessage(tab.id, { type: 'plamo:togglePage', force }, { frameId: 0 });
+  const r = await chrome.tabs.sendMessage(tab.id, { type: 'plamo:togglePage', force, pageLang }, { frameId: 0 });
   await setTabState(tab.id, !!r?.active);
   return r;
 }
@@ -705,7 +719,7 @@ async function togglePage(tab, force) {
 async function setTabState(tabId, active) {
   try {
     await chrome.action.setBadgeText({ tabId, text: active ? '訳' : '' });
-    if (active) await chrome.action.setBadgeBackgroundColor({ tabId, color: '#4f46e5' });
+    if (active) await chrome.action.setBadgeBackgroundColor({ tabId, color: '#165e83' });
     if (chrome.action.setBadgeTextColor) await chrome.action.setBadgeTextColor({ tabId, color: '#ffffff' });
   } catch {}
   await chrome.storage.session.set({ ['tab:' + tabId]: !!active });
@@ -732,6 +746,58 @@ chrome.tabs.onUpdated.addListener((tabId, info) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => chrome.storage.session.remove('tab:' + tabId));
+
+// ---------------------------------------------------------------------------
+// Pages in another language (settings.autoPage). content/detect.js runs on every page while the
+// setting is on and the optional access to all sites is granted; it reports pages that are not in
+// the target language, and this either offers page translation in the page's pill or starts it.
+
+const DETECT = { id: 'plamo-detect', matches: AUTO_ORIGINS, js: ['content/detect.js'], runAt: 'document_idle', allFrames: false, persistAcrossSessions: true };
+let detectorSync = Promise.resolve();
+
+// register / unregister to match the setting and the granted access; refresh rewrites it after an update
+function syncDetector(refresh = false) {
+  detectorSync = detectorSync
+    .then(async () => {
+      await settingsReady;
+      const on = settings.autoPage === 'ask' || settings.autoPage === 'auto';
+      const granted = on && (await chrome.permissions.contains({ origins: AUTO_ORIGINS }));
+      const have = (await chrome.scripting.getRegisteredContentScripts({ ids: [DETECT.id] })).length > 0;
+      if (granted && !have) await chrome.scripting.registerContentScripts([DETECT]);
+      else if (granted && refresh) await chrome.scripting.updateContentScripts([DETECT]);
+      else if (!granted && have) await chrome.scripting.unregisterContentScripts({ ids: [DETECT.id] });
+    })
+    .catch((e) => console.warn('content script registration:', e));
+  return detectorSync;
+}
+syncDetector();
+chrome.permissions.onAdded.addListener(() => syncDetector());
+chrome.permissions.onRemoved.addListener(() => syncDetector());
+
+function webHost(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.hostname : '';
+  } catch {
+    return '';
+  }
+}
+
+async function autoPage(tab, lang) {
+  await settingsReady;
+  const mode = settings.autoPage;
+  if (mode !== 'ask' && mode !== 'auto') return { skipped: 'off' };
+  const host = webHost(tab.url);
+  if (!host || siteSkipped(host, settings.autoPageSkip)) return { skipped: 'site' };
+  const from = normalizeLang(lang);
+  // a language the model does not know, or the target language after all
+  if (!from || from === baseLang(settings.targetLang)) return { skipped: 'lang' };
+  if (!(await modelStatus(currentModel()).catch(() => null))?.present) return { skipped: 'nomodel' };
+  if (mode === 'auto') return togglePage(tab, 'on', from);
+  await inject(tab.id, ['content/page.js']);
+  const to = (LANG_NAME[settings.targetLang] || settings.targetLang).replace('（実験的）', '');
+  return chrome.tabs.sendMessage(tab.id, { type: 'plamo:offer', lang: from, from: LANG_NAME[from], to }, { frameId: 0 });
+}
 
 // ---------------------------------------------------------------------------
 // Selection translation
@@ -770,6 +836,7 @@ async function openTranslateWindow(text) {
 // Context menus & keyboard commands
 
 chrome.runtime.onInstalled.addListener(async (details) => {
+  syncDetector(true);
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: 'plamo-selection', title: 'PLaMo で翻訳「%s」', contexts: ['selection'] });
     chrome.contextMenus.create({ id: 'plamo-page', title: 'このページを翻訳（PLaMo）', contexts: ['page', 'frame', 'link', 'image'] });
@@ -794,4 +861,4 @@ chrome.commands.onCommand.addListener((command, tab) => {
 });
 
 // Debug / test hooks (inspectable from the service worker console).
-self.__plamo = { translate, getStatus, engineCall, closeEngine, togglePage, showSelection, queue, cache, detectLang, resolveTarget };
+self.__plamo = { translate, getStatus, engineCall, closeEngine, togglePage, showSelection, queue, cache, detectLang, resolveTarget, autoPage, syncDetector };

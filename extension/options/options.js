@@ -1,5 +1,5 @@
 import { LANGS } from '../lib/langs.js';
-import { DEFAULTS, getSettings, saveSettings, parseGlossary } from '../lib/settings.js';
+import { DEFAULTS, AUTO_ORIGINS, getSettings, saveSettings, parseGlossary, parseSites } from '../lib/settings.js';
 import { MODELS, fmtBytes, licenseConsent, acceptLicense } from '../lib/models.js';
 import { internalPage } from '../lib/browser.js';
 
@@ -35,6 +35,10 @@ async function init() {
   $('#glossary').value = settings.glossary;
   setSeg('#form', settings.form);
   setSeg('#pageMode', settings.pageMode);
+  setSeg('#autoPage', settings.autoPage);
+  $('#autoPageSkip').value = settings.autoPageSkip;
+  $('#autoPageBrowser').textContent = `ブラウザが出す翻訳の提案と重なるときは、${internalPage('settings/languages')} でブラウザの翻訳をオフにできます。`;
+  renderAutoPage();
   renderModels();
 
   $('#targetLang').addEventListener('change', (e) => save({ targetLang: e.target.value }));
@@ -60,6 +64,14 @@ async function init() {
   });
   bindSeg('#form', (v) => save({ form: v }));
   bindSeg('#pageMode', (v) => save({ pageMode: v }));
+  bindSeg('#autoPage', setAutoPage);
+  let sTimer = 0;
+  $('#autoPageSkip').addEventListener('input', (e) => {
+    clearTimeout(sTimer);
+    sTimer = setTimeout(() => {
+      save({ autoPageSkip: e.target.value }, `対象外のサイトを保存しました（${parseSites(e.target.value).length} 件）`);
+    }, 500);
+  });
 
   $('#btnLoad').addEventListener('click', () =>
     act('モデルを読み込んでいます…', { type: 'loadModel' }, (s) => (s.info ? `読み込みました（${(s.info.loadMs / 1000).toFixed(1)} 秒）` : '')),
@@ -286,6 +298,34 @@ async function act(pendingMsg, msg, okMsg) {
 
 // ---------------------------------------------------------------------------
 
+// Pages in another language. The click on the segment is the user gesture chrome.permissions.request
+// needs, so the request comes before any await.
+async function setAutoPage(v) {
+  if (v !== 'off') {
+    const granted = await chrome.permissions.request({ origins: AUTO_ORIGINS }).catch(() => false);
+    if (!granted) {
+      setSeg('#autoPage', settings.autoPage);
+      renderAutoPage('サイトへのアクセスが許可されなかったため、設定は前のままです。');
+      return;
+    }
+  }
+  await save({ autoPage: v });
+  // back to off: give the access back (a test copy that requires it keeps it)
+  if (v === 'off') await chrome.permissions.remove({ origins: AUTO_ORIGINS }).catch(() => {});
+  renderAutoPage();
+}
+
+async function renderAutoPage(note = '') {
+  const on = settings.autoPage === 'ask' || settings.autoPage === 'auto';
+  $('#autoPageMore').hidden = !on;
+  let warn = note;
+  if (!warn && on && !(await chrome.permissions.contains({ origins: AUTO_ORIGINS }).catch(() => false))) {
+    warn = 'サイトへのアクセスが許可されていないため、外国語のページを開いても何も起きません。もう一度選ぶと、許可を求めます。';
+  }
+  $('#autoPageWarn').textContent = warn;
+  $('#autoPageWarn').hidden = !warn;
+}
+
 function setSeg(sel, v) {
   for (const b of document.querySelectorAll(`${sel} button`)) b.setAttribute('aria-pressed', String(b.dataset.v === v));
 }
@@ -315,4 +355,16 @@ function escapeHtml(s) {
 chrome.storage.onChanged.addListener((ch, area) => {
   if (area === 'local' && ch.pageMode) setSeg('#pageMode', ch.pageMode.newValue);
   if (area === 'local' && ch.licenseConsent) showConsent();
+  if (area === 'local' && ch.autoPage) {
+    settings.autoPage = ch.autoPage.newValue || 'off';
+    setSeg('#autoPage', settings.autoPage);
+    renderAutoPage();
+  }
+  // the popup and the page's pill add sites too
+  if (area === 'local' && ch.autoPageSkip) {
+    settings.autoPageSkip = ch.autoPageSkip.newValue || '';
+    if (document.activeElement !== $('#autoPageSkip')) $('#autoPageSkip').value = settings.autoPageSkip;
+  }
 });
+chrome.permissions.onAdded.addListener(() => renderAutoPage());
+chrome.permissions.onRemoved.addListener(() => renderAutoPage());

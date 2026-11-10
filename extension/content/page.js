@@ -38,6 +38,7 @@
     done: 0,
     failed: 0,
     paused: null,         // error payload when paused (model missing / failed to load)
+    offer: null,          // {lang, from, to, skipped} while the pill offers to translate (autoPage 'ask')
     port: null,
     io: null,
     mo: null,
@@ -694,18 +695,22 @@
   }
 
   // ---------------------------------------------------------------- lifecycle
-  async function start() {
+  // knownLang: the page language, when content/detect.js already found it
+  async function start(knownLang) {
     if (S.active) return;
+    S.offer = null;
     const cfg = await chrome.runtime.sendMessage({ type: 'pageSettings' });
     S.mode = cfg.pageMode || 'replace';
     S.altTarget = cfg.altTargetLang || 'en';
     S.target = cfg.targetLang || 'ja';
     // page already in the target language? translate into the alternative language instead
-    const sample = (document.title + '\n' + (document.body?.innerText || '').slice(0, 2000)).trim();
-    let pageLang = null;
-    try {
-      pageLang = (await chrome.runtime.sendMessage({ type: 'detectLang', text: sample }))?.lang;
-    } catch {}
+    let pageLang = knownLang || null;
+    if (!pageLang) {
+      const sample = (document.title + '\n' + (document.body?.innerText || '').slice(0, 2000)).trim();
+      try {
+        pageLang = (await chrome.runtime.sendMessage({ type: 'detectLang', text: sample }))?.lang;
+      } catch {}
+    }
     const base = S.target === 'ja(easy)' ? 'ja' : S.target;
     if (pageLang && pageLang === base) S.target = S.altTarget;
     S.context = cfg.useTitleContext ? document.title.trim().slice(0, 160) : '';
@@ -788,6 +793,8 @@
     let host = null;
     let els = null;
     let hideTimer = 0;
+    let offerTimer = 0;
+    const offering = () => !!S.offer && !S.active;
     // graphite neutrals and the 藍 accent of the extension pages (ui/base.css), inside a shadow root
     const css = `
       :host { all: initial; }
@@ -816,16 +823,20 @@
       .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-fg); font-weight: 500; }
       .btn { border-radius: 8px; color: var(--fg); background: var(--chip); }
       .btn:hover { background: var(--chip-hover); }
+      .btn.go { background: var(--accent); color: #fff; font-weight: 500; }
+      .btn.go:hover { background: var(--accent-hover); }
+      .btn.never { background: transparent; color: var(--muted); padding: 4px 8px; }
+      .btn.never:hover { background: var(--chip); color: var(--fg); }
       .seg button:hover { color: var(--fg); }
       .x { all: unset; cursor: pointer; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; color: var(--muted);
         transition: background-color 150ms cubic-bezier(.22,1,.36,1), color 150ms cubic-bezier(.22,1,.36,1); }
       .x:hover { background: var(--chip); color: var(--fg); }
       button:focus-visible, .badge:focus-visible { outline: 2px solid var(--accent-fg); outline-offset: 2px; }
       :host { --bg: #ffffff; --fg: #171717; --muted: #525252; --border: rgba(23,23,23,.1); --chip: rgba(23,23,23,.06); --chip-hover: rgba(23,23,23,.1);
-        --accent: #165e83; --accent-soft: rgba(22,94,131,.08); --accent-fg: #165e83; --track: rgba(22,94,131,.2); --danger: #dc2626; }
+        --accent: #165e83; --accent-hover: #124d6b; --accent-soft: rgba(22,94,131,.08); --accent-fg: #165e83; --track: rgba(22,94,131,.2); --danger: #dc2626; }
       @media (prefers-color-scheme: dark) {
         :host { --bg: #19191b; --fg: #ededed; --muted: #a1a1a6; --border: rgba(237,237,237,.1); --chip: rgba(237,237,237,.08); --chip-hover: rgba(237,237,237,.13);
-          --accent: #1d6f99; --accent-soft: rgba(128,188,218,.12); --accent-fg: #80bcda; --track: rgba(128,188,218,.25); --danger: #e5484d; }
+          --accent: #1d6f99; --accent-hover: #2580ae; --accent-soft: rgba(128,188,218,.12); --accent-fg: #80bcda; --track: rgba(128,188,218,.25); --danger: #e5484d; }
       }`;
     function show() {
       if (host) return;
@@ -840,6 +851,8 @@
           <span class="seg" role="group" aria-label="表示方法">
             <button data-mode="replace">置換</button><button data-mode="bilingual">併記</button>
           </span>
+          <button class="btn go" hidden></button>
+          <button class="btn never" hidden>このサイトでは尋ねない</button>
           <button class="btn retry" hidden>再試行</button>
           <button class="btn off">原文に戻す</button>
           <button class="x" title="最小化" aria-label="最小化">
@@ -854,11 +867,28 @@
         retry: root.querySelector('.retry'),
         off: root.querySelector('.off'),
         x: root.querySelector('.x'),
+        xPath: root.querySelector('.x path'),
+        go: root.querySelector('.go'),
+        never: root.querySelector('.never'),
+        segWrap: root.querySelector('.seg'),
         seg: [...root.querySelectorAll('.seg button')],
       };
       els.off.onclick = () => stop();
       els.retry.onclick = () => (S.paused?.code === 'NO_MODEL' ? chrome.runtime.sendMessage({ type: 'openOptions' }) : resume());
-      els.x.onclick = () => els.pill.classList.add('min');
+      els.x.onclick = () => (offering() ? dismiss() : els.pill.classList.add('min'));
+      els.go.onclick = () => {
+        if (els.go.disabled) return;
+        els.go.disabled = true;
+        clearTimeout(offerTimer);
+        start(S.offer?.lang);
+      };
+      els.never.onclick = () => {
+        chrome.runtime.sendMessage({ type: 'autoPageSkip', host: location.hostname, skip: true }).catch(() => {});
+        S.offer = { ...S.offer, skipped: true };
+        update();
+        clearTimeout(offerTimer);
+        offerTimer = setTimeout(dismiss, 2000);
+      };
       els.badge.onclick = () => els.pill.classList.remove('min');
       for (const b of els.seg) {
         b.onclick = () => {
@@ -868,14 +898,49 @@
       }
       document.documentElement.appendChild(host);
     }
+    // autoPage 'ask': offer to translate this page; folds into the badge after a while (the badge opens it again)
+    function offer(o) {
+      if (S.active) return;
+      S.offer = o;
+      show();
+      els.pill.classList.remove('min');
+      els.msg.setAttribute('role', 'status'); // read out once: the offer appears without taking focus
+      setTimeout(update, 50);
+      clearTimeout(offerTimer);
+      offerTimer = setTimeout(() => {
+        if (els && offering() && !els.pill.matches(':hover, :focus-within')) els.pill.classList.add('min');
+      }, 10000);
+    }
+    function dismiss() {
+      clearTimeout(offerTimer);
+      S.offer = null;
+      if (!S.active) hide();
+    }
     function hide() {
       clearTimeout(hideTimer);
+      clearTimeout(offerTimer);
       host?.remove();
       host = null;
       els = null;
     }
     function update() {
       if (!els) return;
+      const asking = offering();
+      els.go.hidden = els.never.hidden = !asking || !!S.offer.skipped;
+      els.segWrap.hidden = els.off.hidden = asking;
+      const xName = asking ? '閉じる' : '最小化';
+      els.x.title = xName;
+      els.x.setAttribute('aria-label', xName);
+      els.xPath.setAttribute('d', asking ? 'M3 3l6 6M9 3l-6 6' : 'M2.5 6h7');
+      if (asking) {
+        els.spin.hidden = els.retry.hidden = true;
+        els.msg.classList.remove('err');
+        els.msg.textContent = S.offer.skipped ? 'このサイトでは今後尋ねません' : `${S.offer.from}のページ`;
+        els.go.textContent = `${S.offer.to}に翻訳`;
+        els.go.disabled = false;
+        return;
+      }
+      els.msg.removeAttribute('role');
       const st = stats();
       for (const b of els.seg) b.setAttribute('aria-pressed', String(b.dataset.mode === S.mode));
       els.retry.hidden = !S.paused && !st.failed;
@@ -900,7 +965,7 @@
         if (!hideTimer && !st.failed) hideTimer = setTimeout(() => els?.pill.classList.add('min'), 2500);
       }
     }
-    return { show, hide, update };
+    return { show, hide, update, offer };
   })();
 
   // ---------------------------------------------------------------- messages
@@ -908,11 +973,16 @@
     if (!msg || typeof msg.type !== 'string' || !msg.type.startsWith('plamo:')) return;
     if (msg.type === 'plamo:togglePage') {
       const want = msg.force === 'on' ? true : msg.force === 'off' ? false : !S.active;
-      (want ? start() : Promise.resolve(stop())).then(
+      (want ? start(msg.pageLang) : Promise.resolve(stop())).then(
         () => sendResponse({ active: S.active, mode: S.mode, target: S.target }),
         (e) => sendResponse({ active: S.active, error: { message: String(e?.message || e) } }),
       );
       return true;
+    }
+    if (msg.type === 'plamo:offer') {
+      ui.offer({ lang: msg.lang, from: msg.from, to: msg.to });
+      sendResponse({ ok: true, active: S.active });
+      return;
     }
     if (msg.type === 'plamo:pageState') {
       sendResponse({ active: S.active, mode: S.mode, target: S.target, ...stats() });
