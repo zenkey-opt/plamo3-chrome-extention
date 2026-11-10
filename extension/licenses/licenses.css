@@ -1,0 +1,26 @@
+h3 { font-size: 13px; margin: 16px 0 6px; font-weight: 650; }
+.text { margin: 0; }
+.points { margin: 0; padding-left: 1.3em; }
+.points li { margin: 3px 0; }
+.oss { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+.oss td { padding: 6px 0; border-top: 1px solid var(--border); vertical-align: top; }
+.oss tr:first-child td { border-top: none; }
+.oss td:last-child { color: var(--muted); text-align: right; white-space: nowrap; padding-left: 16px; }
+details { margin-top: 12px; border: 1px solid var(--border); border-radius: 8px; }
+details + details { margin-top: 8px; }
+summary { cursor: pointer; padding: 7px 12px; font-weight: 600; font-size: 12.5px; }
+summary:hover { background: var(--hover); border-radius: 8px; }
+details[open] summary { border-bottom: 1px solid var(--border); border-radius: 8px 8px 0 0; }
+pre {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 420px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 12.5px/1.75 var(--font);
+  color: var(--muted);
+}
+/* the notices are laid out for a fixed-width font (78-column rules, indented lists) */
+details[data-src$="NOTICES.txt"] pre { font: 12px/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace; }
+details + .hint { margin-top: 10px; }

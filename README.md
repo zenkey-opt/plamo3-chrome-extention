@@ -48,10 +48,12 @@ extension/               Brave に読み込むフォルダ（これだけで完�
   content/page.js        ページ翻訳（<xN> プレースホルダでインライン要素を保持）
   content/selection.js   選択翻訳カード
   popup/ options/ ui/    ポップアップと設定画面
+  licenses/              ライセンス画面、PLaMo コミュニティライセンス契約の写し、THIRD-PARTY-NOTICES.txt
 tools/
   build-wllama.sh        wllama の wasm を再ビルド（emsdk 4.0.20 + emdawnwebgpu、パッチ適用。作業場所は .work/）
   wllama-patches/        wllama と llama.cpp（ggml-webgpu）へのパッチ（下の「仕組みメモ」）
   vendor-wllama.mjs      ビルドを extension/vendor/wllama に取り込む（MV3 向けの書き換え込み）
+  gen-notices.mjs        wasm に入っているソフトウェアのライセンス表示（THIRD-PARTY-NOTICES.txt）を生成
 tests/                   CDP で隔離した Brave を動かす検証スクリプトとテストページ
 ```
 
@@ -147,6 +149,7 @@ v0.1（ネイティブ CUDA の llama-server）は生成 約 140 tok/s で、ブ
 bash tools/build-wllama.sh                                              # .work/ に emsdk とソースを取得してビルド（パッチ適用）
 node tools/vendor-wllama.mjs --wasm-dir .work/wsrc/build --reuse-index  # wasm とグルー（llama-worker.js）を差し替え
 node tools/vendor-wllama.mjs --wasm-dir .work/wsrc/build                # wllama 本体（index.js）ごと取り込み直すとき
+node tools/gen-notices.mjs                                              # ライセンス表示を作り直す（.work のソースから）
 ```
 
 `build-wllama.sh` 冒頭のコミット（wllama / llama.cpp）を変えると別バージョンになります。
@@ -175,6 +178,47 @@ bash tests/use-logprobs.sh on && node tests/logprob_compare.mjs run a   # 訳文
 
 ## ライセンス
 
-モデルは PLaMo Community License。個人・非商用は無償・登録不要。商用利用は直近年度の売上 10 億円以下なら
-[登録フォーム](https://forms.gle/mTL8tBLrMYXKNZD56)の提出で無償、超える場合は PFN と別契約。
-llama.cpp・wllama は MIT（`extension/vendor/wllama/LICENSE-*`）。
+**Built with PLaMo.** 翻訳モデルには、株式会社 Preferred Networks（PFN）の PLaMo 3 Translate を使っています。
+この拡張機能は個人が開発した非公式のもので、PFN が提供・承認・保証しているものではありません。
+「PLaMo」は株式会社 Preferred Networks の商標です。
+
+### 翻訳モデル（PLaMo 3 Translate）
+
+[PLaMo コミュニティライセンス契約](https://plamo.preferredai.jp/info/plamo-community-license-ja)
+（[English](https://plamo.preferredai.jp/info/plamo-community-license-en)）で公開されています。
+モデルはこの拡張機能に含まれず、初回に利用者の PC が Hugging Face の公式リポジトリ（pfnet）から直接ダウンロードします。
+モデルリポジトリに同梱されている契約書（2026 年 11 月 9 日改定版）の写しを `extension/licenses/` に置いています。
+拡張機能の設定画面の「ライセンス」からも読めます。
+
+使う人に関係する主な条件（要点の抜粋。正確な条件は契約の全文で確認してください）：
+
+- モデルをダウンロードして使うと、この契約が適用されます（前文、第 11 条）。18 歳以上（または居住国で単独で契約できる年齢）
+  であることが条件で、満たさない場合は親権者などの同意が必要です（第 2 条）。
+- 私的使用と学術用途なら、無償で登録も要りません（第 1 条、第 3 条）。
+- 事業での利用や営利目的の利用は「商業目的」にあたり、組織の中での利用も含まれます（第 1 条 10 号）。
+  商業目的で使う条件は、事前に [PFN の登録フォーム](https://forms.gle/mTL8tBLrMYXKNZD56)で登録することと、
+  本人または関係会社の直近の事業年度の収入・売上が 10 億円以下であることです。
+  満たさない場合は、PFN から商業用のライセンスを別に取得する必要があります（第 3 条 3 項）。
+- PLaMo 3 Translate のように翻訳だけを行うモデル（契約でいう「変換モデル」）の訳文は、PLaMo の出力だと明示しなくても公表できます。
+  ただし、書籍・論文など独立した長文の公表物の全部や実質的な部分に使うときは、奥付・謝辞・末尾などに
+  PLaMo を翻訳に使ったことを書きます（第 5 条 2 項）。
+- 訳文で学習したモデルにも、この契約が適用されます（第 5 条 3 項）。訳文（訳文を含むデータセットを含む）を
+  人に渡したり公開したりするときは、そのことを相手にわかる形で表示する必要があります（第 5 条 4 項）。
+- モデルと訳文は現状のまま提供され、PFN は正確さなどを保証しません。法律・医療・金融・人物評価などの重要な判断で、
+  訳文を唯一の根拠にしてはいけません（第 7 条）。
+
+### 同梱しているソフトウェア
+
+推論エンジン（`extension/vendor/wllama/`）に含まれるソフトウェアと、その著作権表示・ライセンス全文は
+`extension/licenses/THIRD-PARTY-NOTICES.txt` にまとめています（`node tools/gen-notices.mjs` で、ビルドに使ったソースから生成）。
+
+| ソフトウェア | ライセンス |
+| --- | --- |
+| [wllama](https://github.com/ngxson/wllama) | MIT |
+| [llama.cpp](https://github.com/ggml-org/llama.cpp) / ggml（WebGPU 向けのパッチを含む） | MIT |
+| JSON for Modern C++（nlohmann/json） | MIT |
+| Emscripten（ランタイム、WebGPU バインディング） | MIT / University of Illinois/NCSA |
+| musl libc | MIT |
+| Dawn（webgpu_cpp） | BSD 3-Clause |
+| stb_image、miniaudio（llama.cpp のマルチモーダル用。この拡張では使っていません） | パブリックドメイン / MIT 系 |
+| LLVM libc++ など | Apache 2.0（LLVM 例外付き） |
