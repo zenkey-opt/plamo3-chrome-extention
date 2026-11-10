@@ -206,22 +206,32 @@ async function complete({ rid, modelId, prompt, nPredict, stream }, port) {
     cache_prompt: true,
     abortSignal: ctrl.signal,
   };
+  // wllama's exit() ends its worker without settling the calls in progress. Once this request is aborted
+  // (the model is being unloaded), stop waiting after a moment: otherwise it never answers and keeps its
+  // slot in the service worker's queue, and with every slot taken nothing is translated again.
+  const gone = new Promise((_, reject) => {
+    ctrl.signal.addEventListener('abort', () => setTimeout(() => reject(new EngineError('ABORTED', '中断しました')), 2000), { once: true });
+  });
+  gone.catch(() => {});
   try {
     if (stream) {
-      await w.createCompletion({
-        ...params,
-        stream: true,
-        onData: (c) => {
-          const t = c?.choices?.[0]?.text;
-          if (t) {
-            text += t;
-            post(port, { k: 'delta', rid, text });
-          }
-          if (c?.timings) last = c;
-        },
-      });
+      await Promise.race([
+        w.createCompletion({
+          ...params,
+          stream: true,
+          onData: (c) => {
+            const t = c?.choices?.[0]?.text;
+            if (t) {
+              text += t;
+              post(port, { k: 'delta', rid, text });
+            }
+            if (c?.timings) last = c;
+          },
+        }),
+        gone,
+      ]);
     } else {
-      last = await w.createCompletion(params);
+      last = await Promise.race([w.createCompletion(params), gone]);
       text = last?.choices?.[0]?.text || '';
     }
     return { text, timings: last?.timings || null, t: { load: Math.round(t1 - t0), infer: Math.round(performance.now() - t1) } };
