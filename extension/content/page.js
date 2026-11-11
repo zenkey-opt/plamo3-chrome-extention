@@ -349,6 +349,137 @@
 
   const stripTags = (s) => s.replace(/<\/?x\d+\/?>/g, '');
 
+  // A translation whose tags do not parse (the model left a tag open or closed the wrong one) would put the
+  // whole paragraph in 併記. Repair it from the source's structure instead:
+  //  - an element the model never closes ends where the output leaves it: at a tag that cannot be inside it
+  //    in the source, at a closing tag with a wrong number, or at the end of the output; when it ends at a
+  //    tag or at the end, the words after its last child stay inside only up to the first clause punctuation
+  //    (an element that wraps the rest of the source keeps everything up to the end)
+  //  - a tag the source does not have is dropped; a second use of a tag keeps its words, not the tag
+  //  - a link left empty (the model put its tag after its words) takes the words just before it
+  // A link missing from the output still means 併記: links are never lost.
+  const CLAUSE = /[、。，．！？）」』】〕〉》]|[,.;:!?)\]](?=\s|$)/;
+  const CLAUSE_G = new RegExp(CLAUSE.source, 'g');
+  function repairParse(out, unit) {
+    const map = unit.map;
+    const within = (a, b) => {
+      if (a < 0) return true;
+      for (let p = map[b].parentIdx; p >= 0; p = map[p].parentIdx) if (p === a) return true;
+      return false;
+    };
+    const toks = [];
+    let last = 0;
+    let m;
+    TAG_RE.lastIndex = 0;
+    while ((m = TAG_RE.exec(out))) {
+      if (m.index > last) toks.push({ text: out.slice(last, m.index) });
+      toks.push({ idx: +m[2], close: !!m[1], self: !!m[3] });
+      last = TAG_RE.lastIndex;
+    }
+    if (last < out.length) toks.push({ text: out.slice(last) });
+    const lastClose = new Map();
+    toks.forEach((t, i) => t.close && lastClose.set(t.idx, i));
+    const toEnd = new Set();
+    for (let i = 0; i < map.length; i++) {
+      const c = unit.src.indexOf(`</x${i}>`);
+      if (c >= 0 && !unit.src.slice(c).replace(/<\/?x\d+\/?>|\s/g, '')) toEnd.add(i);
+    }
+    const root = { idx: -1, children: [] };
+    const stack = [root];
+    const used = new Set();
+    const top = () => stack[stack.length - 1];
+    const neverClosed = (n) => n.idx >= 0 && !((lastClose.get(n.idx) ?? -1) > n.at);
+    const closeLeftOpen = (atEnd) => {
+      const n = stack.pop();
+      if (atEnd && toEnd.has(n.idx)) return;
+      const tail = n.children[n.children.length - 1];
+      if (tail?.text === undefined) return;
+      const c = CLAUSE.exec(tail.text);
+      if (!c || (!c.index && n.children.length === 1)) return;
+      const rest = tail.text.slice(c.index);
+      if (c.index) tail.text = tail.text.slice(0, c.index);
+      else n.children.pop();
+      top().children.push({ text: rest });
+    };
+    for (let t = 0; t < toks.length; t++) {
+      const tok = toks[t];
+      if (tok.text !== undefined) {
+        top().children.push({ text: tok.text });
+        continue;
+      }
+      const info = map[tok.idx];
+      if (!info) continue;
+      if (tok.close) {
+        const at = stack.findLastIndex((n) => n.idx === tok.idx);
+        if (at > 0) {
+          while (stack.length - 1 > at) closeLeftOpen(false);
+          stack.pop();
+        } else if (neverClosed(top())) stack.pop();
+        continue;
+      }
+      while (stack.length > 1 && neverClosed(top()) && !within(top().idx, tok.idx)) closeLeftOpen(false);
+      const node = { idx: tok.idx, children: [], at: t };
+      if (used.has(tok.idx)) node.dup = true;
+      else used.add(tok.idx);
+      if (!node.dup || (!tok.self && info.kind !== 'atomic')) top().children.push(node);
+      if (tok.self) continue;
+      if (info.kind === 'atomic') {
+        const c = toks.findIndex((x, i) => i > t && x.close && x.idx === tok.idx);
+        if (c > 0) t = c;
+        continue;
+      }
+      stack.push(node);
+    }
+    while (stack.length > 1) closeLeftOpen(true);
+    const flat = (n) => {
+      const kids = [];
+      for (const c of n.children) {
+        if (c.text !== undefined) kids.push(c);
+        else if (c.dup) kids.push(...flat(c).children);
+        else kids.push(flat(c));
+      }
+      n.children = kids;
+      return n;
+    };
+    flat(root);
+    for (let i = 0; i < map.length; i++) if (!used.has(i) && map[i].required) return null;
+    const hasText = (n) => (n.text !== undefined ? !!n.text.trim() : n.children.some(hasText));
+    const isEmptyLink = (c) => c.text === undefined && map[c.idx].required && map[c.idx].kind === 'el' && !hasText(c);
+    const fill = (n) => {
+      n.children.forEach((c, k) => {
+        if (c.text !== undefined) return;
+        fill(c);
+        if (!isEmptyLink(c)) return;
+        const prev = n.children[k - 1];
+        if (prev?.text !== undefined) {
+          let cut = 0;
+          CLAUSE_G.lastIndex = 0;
+          for (let x; (x = CLAUSE_G.exec(prev.text)); ) cut = x.index + x[0].length;
+          cut += prev.text.slice(cut).match(/^\s*/)[0].length;
+          const words = prev.text.slice(cut);
+          if (words.trim()) {
+            prev.text = prev.text.slice(0, cut);
+            c.children.push({ text: words });
+            return;
+          }
+        }
+        const next = n.children[k + 1];
+        if (next?.text !== undefined) {
+          const x = CLAUSE.exec(next.text);
+          const words = x ? next.text.slice(0, x.index) : next.text;
+          if (words.trim()) {
+            next.text = next.text.slice(words.length);
+            c.children.push({ text: words });
+          }
+        }
+      });
+    };
+    fill(root);
+    const anyEmpty = (n) => n.children.some((c) => c.text === undefined && (isEmptyLink(c) || anyEmpty(c)));
+    if (anyEmpty(root)) return null;
+    return { root, used };
+  }
+
   // ---------------------------------------------------------------- building DOM
   function own(n) {
     ownNodes.add(n);
@@ -422,12 +553,16 @@
     }
     const out = unit.translation;
     const hasEls = unit.nodes.some((n) => n.nodeType === Node.ELEMENT_NODE && n.tagName !== 'BR');
-    const parsed = unit.map.length
-      ? parse(out, unit)
-      : hasEls
-        ? null
-        : { root: { children: [{ text: out }] }, used: new Set() };
-    const mode = parsed ? S.mode : 'bilingual'; // tag mismatch: never break links, show below instead
+    let parsed = null;
+    unit.repaired = false;
+    if (unit.map.length) {
+      parsed = parse(out, unit);
+      if (!parsed) {
+        parsed = repairParse(out, unit);
+        unit.repaired = !!parsed;
+      }
+    } else if (!hasEls) parsed = { root: { children: [{ text: out }] }, used: new Set() };
+    const mode = parsed ? S.mode : 'bilingual'; // a link the translation lost: never break links, show below instead
     const tree = parsed || { root: { children: [{ text: stripTags(out) }] }, used: new Set() };
     unit.renderMode = mode;
     unit.fallback = !parsed;
@@ -499,6 +634,9 @@
           const marker = document.createComment('plamo');
           unit.parent.insertBefore(marker, anchor);
           for (const n of unit.translatedTop) if (n.parentNode === unit.parent) n.remove();
+          // empty them all first: when the translation nested them the other way round (<a><i>…</i></a> for
+          // <i><a>…</a></i>), putting one back into the other would make an element its own ancestor
+          for (const el of unit.origChildren.keys()) el.replaceChildren();
           for (const [el, kids] of unit.origChildren) el.replaceChildren(...kids);
           const frag = document.createDocumentFragment();
           for (const n of unit.origTop) frag.appendChild(n);
@@ -794,8 +932,12 @@
     for (const u of S.units) if (u.state !== 'skip' && u.state !== 'stale') total++;
     const visibleTotal = S.done + S.failed + S.inflight.size + S.waiting.length;
     let fallback = 0;
-    for (const u of S.units) if (u.fallback && u.applied) fallback++;
-    return { total, visibleTotal, done: S.done, failed: S.failed, fallback, busy: S.inflight.size + S.waiting.length };
+    let repaired = 0;
+    for (const u of S.units) {
+      if (u.fallback && u.applied) fallback++;
+      if (u.repaired && u.applied) repaired++;
+    }
+    return { total, visibleTotal, done: S.done, failed: S.failed, fallback, repaired, busy: S.inflight.size + S.waiting.length };
   }
 
   // ---------------------------------------------------------------- glass over the units in flight (置換 only)

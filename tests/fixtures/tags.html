@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Tag repair</title>
+  <link rel="icon" href="data:," />
+  <style>
+    body { font: 16px/1.6 system-ui, sans-serif; margin: 24px auto; max-width: 760px; padding: 0 16px; }
+  </style>
+</head>
+<body>
+<!-- Translations whose tags do not parse, in the shapes PLaMo 3 Translate gave on an encyclopedia article:
+     a link left open, a link tag put after its words, a close with the wrong number, a link not closed
+     before the next element, a tag used twice, a tag the source does not have; plus a translation that
+     drops a link (stays 併記) and one that parses as is. tags_test.mjs answers each with a fixed output. -->
+<div id="cases">
+  <p id="open"><b>Glowgate</b> (named after <a href="/w/Glow">Glow</a> from the <i><a href="/w/Frost">Frost</a></i> series and the <a href="/w/Gate"><i>-gate</i> scandal suffix</a>) is a dispute about clips on <a href="/w/Tube">Tube</a> that were labelled as safe.</p>
+  <ol>
+    <li id="moved"><cite>Doe, Jane (2017). <q>Tube bans the odd channel</q>. <i>Daily</i>. <a href="https://archive.example/1">Archived</a> from the original on 19 January 2018<span>. Retrieved <span>25 January</span> 2018</span>.</cite></li>
+    <li id="wrongclose"><cite>Roe, Sam (2017-12-08). <q>Inside the odd clip war</q>. <i>Verge</i>. <a href="https://archive.example/2">Archived</a> from the original on 2018-04-13<span>. Retrieved <span>2018-05-01</span></span>.</cite></li>
+    <li id="neverclosed"><cite>Poe, Ben (9 November 2017). <q>Tube says it will act</q>. <i>Verge</i>. <a href="https://archive.example/3">Archived</a> from the original on 2017-11-16. <span>In August, Tube said it would stop paying for such clips.</span></cite></li>
+  </ol>
+  <p id="twice">Read the <a href="/w/Guide">guide</a> before you post, and keep the guide open while you edit.</p>
+  <p id="unknown">Ask on the <a href="/w/Forum">forum</a> if you are stuck.</p>
+  <p id="dropped">See the <a href="/w/Rules">rules</a> for details.</p>
+  <p id="valid">The <i><a href="/w/Frost">Frost</a></i> films were a hit.</p>
+</div>
+</body>
+</html>
