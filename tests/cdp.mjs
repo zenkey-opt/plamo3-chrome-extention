@@ -93,7 +93,19 @@ async function isoEval(t, js) {
     const mainFrame = tree.frameTree.frame.id;
     await c.send('Runtime.enable');
     await new Promise((r) => setTimeout(r, 300));
-    const ctx = ctxs.find((x) => x.auxData?.type === 'isolated' && x.name === EXT_NAME && x.auxData?.frameId === mainFrame);
+    // a page can carry more than one world with the extension's name; the content scripts' own one is the
+    // one with chrome.runtime (Elsagate on Wikipedia had a second one without it)
+    const cands = ctxs.filter((x) => x.auxData?.type === 'isolated' && x.name === EXT_NAME && x.auxData?.frameId === mainFrame);
+    let ctx = cands[0];
+    if (cands.length > 1) {
+      for (const x of cands) {
+        const p = await c.send('Runtime.evaluate', { expression: '!!globalThis.chrome?.runtime?.id', returnByValue: true, contextId: x.id });
+        if (p.result?.value === true) {
+          ctx = x;
+          break;
+        }
+      }
+    }
     if (!ctx) throw new Error('isolated world not found: ' + ctxs.map((x) => `${x.name}/${x.auxData?.type}`).join(', '));
     const r = await c.send('Runtime.evaluate', { expression: js, awaitPromise: true, returnByValue: true, contextId: ctx.id });
     return unwrap(r);
