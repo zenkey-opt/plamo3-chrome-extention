@@ -356,10 +356,19 @@
   //    tag or at the end, the words after its last child stay inside only up to the first clause punctuation
   //    (an element that wraps the rest of the source keeps everything up to the end)
   //  - a tag the source does not have is dropped; a second use of a tag keeps its words, not the tag
+  //  - a closing tag for an element the output never opened (the model gave its opening tag another number)
+  //    takes the words just before it
   //  - a link left empty (the model put its tag after its words) takes the words just before it
   // A link missing from the output still means 併記: links are never lost.
   const CLAUSE = /[、。，．！？）」』】〕〉》]|[,.;:!?)\]](?=\s|$)/;
   const CLAUSE_G = new RegExp(CLAUSE.source, 'g');
+  // where the words at the end of s begin: after its last clause punctuation and the spaces after it
+  const lastWords = (s) => {
+    let cut = 0;
+    CLAUSE_G.lastIndex = 0;
+    for (let x; (x = CLAUSE_G.exec(s)); ) cut = x.index + x[0].length;
+    return cut + s.slice(cut).match(/^\s*/)[0].length;
+  };
   function repairParse(out, unit) {
     const map = unit.map;
     const within = (a, b) => {
@@ -415,6 +424,16 @@
           while (stack.length - 1 > at) closeLeftOpen(false);
           stack.pop();
         } else if (neverClosed(top())) stack.pop();
+        else if (!used.has(tok.idx) && info.kind === 'el') {
+          const kids = top().children;
+          const tail = kids[kids.length - 1];
+          const cut = tail?.text !== undefined ? lastWords(tail.text) : -1;
+          if (cut >= 0 && tail.text.slice(cut).trim()) {
+            used.add(tok.idx);
+            kids.push({ idx: tok.idx, children: [{ text: tail.text.slice(cut) }], at: t });
+            tail.text = tail.text.slice(0, cut);
+          }
+        }
         continue;
       }
       while (stack.length > 1 && neverClosed(top()) && !within(top().idx, tok.idx)) closeLeftOpen(false);
@@ -452,10 +471,7 @@
         if (!isEmptyLink(c)) return;
         const prev = n.children[k - 1];
         if (prev?.text !== undefined) {
-          let cut = 0;
-          CLAUSE_G.lastIndex = 0;
-          for (let x; (x = CLAUSE_G.exec(prev.text)); ) cut = x.index + x[0].length;
-          cut += prev.text.slice(cut).match(/^\s*/)[0].length;
+          const cut = lastWords(prev.text);
           const words = prev.text.slice(cut);
           if (words.trim()) {
             prev.text = prev.text.slice(0, cut);

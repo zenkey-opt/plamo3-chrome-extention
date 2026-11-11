@@ -50,6 +50,13 @@ const CASES = {
     links: { '/w/Forum': 'フォーラム' },
     text: '行き詰まったらフォーラムで質問してください。',
   },
+  // the link opened with the number of the footnote before it, closed with its own
+  wrongopen: {
+    src: 'The tag spread on <x0>Twitter</x0>.<x1/> On <x2>Reddit</x2>, a <x3>board</x3> was made.',
+    out: '<x0>Twitter</x0>でタグが広まった。<x1>Reddit</x2>では<x3>掲示板</x3>が作られた。',
+    links: { '/w/Twitter': 'Twitter', '#n1': '[1]', '/w/Reddit': 'Reddit', '/w/Board': '掲示板' },
+    text: 'Twitterでタグが広まった。[1]Redditでは掲示板が作られた。',
+  },
   dropped: {
     src: 'See the <x0>rules</x0> for details.',
     out: '詳しくは規則を参照。',
@@ -118,7 +125,7 @@ for (let i = 0; i < 60; i++) {
 const asked = JSON.parse(cdp('iso', 'tags.html', 'JSON.stringify(window.__asked || [])'));
 const unexpected = asked.filter((s) => !(s in ANSWERS));
 check('every paragraph was asked for with the expected source', unexpected.length === 0 && asked.length === Object.keys(CASES).length, { unexpected, asked: asked.length });
-check('stats: 6 repaired, 1 in 併記', st.repaired === 6 && st.fallback === 1 && st.failed === 0, st);
+check('stats: 7 repaired, 1 in 併記', st.repaired === 7 && st.fallback === 1 && st.failed === 0, st);
 
 const dom = JSON.parse(cdp('page', 'tags.html', `JSON.stringify(Object.fromEntries([...document.querySelectorAll('#cases [id]')].map((el) => [el.id, {
   text: [...el.childNodes].filter((n) => n.nodeName !== 'PLAMO-T').map((n) => n.textContent).join('').replace(/\\s+/g, ' ').trim(),
