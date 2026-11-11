@@ -1,6 +1,7 @@
 // The glass over paragraphs in flight (置換 only), on tests/fixtures/glow.html in the test browser.
 // The engine is unloaded before each start, so the requests stay in flight while the model loads (~5 s).
-// Checks: which paragraphs get glass, where it sits (the visible lines only: not an off-page label, not a
+// Checks: off by default (nothing stored: no glass, the options checkbox unchecked), which paragraphs get
+// glass, where it sits (the visible lines only: not an off-page label, not a
 // float beside the text), the light per background, one page-fixed light pattern before and after scrolling,
 // no scroll bar added, background and float pixels untouched (with and without the light), 併記 and the
 // setting, cleanup.
@@ -51,7 +52,8 @@ const unload = () => {
 };
 
 // ---------------------------------------------------------------- page
-set({ pageGlow: true, pageMode: 'replace' });
+const DEFAULTS = "chrome.storage.local.remove('pageGlow').then(() => chrome.storage.local.set({ pageMode: 'replace' })).then(() => 'ok')";
+cdp('sw', DEFAULTS);
 for (let i = 0; i < 4; i++) { try { cdp('close', 'glow.html'); } catch { break; } }
 cdp('open', URL_);
 await sleep(2000);
@@ -111,6 +113,34 @@ const iso = () => JSON.parse(cdp('iso', 'glow.html', ISO));
 const fxNow = async () => JSON.parse(await ev(FX));
 const overlap = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
 const near = (a, b, tol = 2) => a.every((v, i) => Math.abs(v - b[i]) <= tol);
+
+// ---------------------------------------------------------------- 置換, nothing stored: off by default
+console.log('unload:', unload());
+console.log('start:', toggle('on'));
+await sleep(900);
+{
+  const s0 = iso();
+  const f0 = await fxNow();
+  check('default (nothing stored): requests in flight, no glass', s0.units.length > 0 && s0.glow === 0 && f0.fx.length === 0,
+    { inflight: s0.units.length, glow: s0.glow, fx: f0.fx.length });
+  // a fresh options page reads the stored settings when it opens
+  for (let i = 0; i < 6; i++) {
+    try {
+      cdp('close', 'options/options.html');
+    } catch {
+      break;
+    }
+  }
+  cdp('open', 'chrome-extension://bhkpaambekhpdikhkccbfdappiogpgnc/options/options.html');
+  await sleep(1500);
+  const box = cdp('page', 'options/options.html', "JSON.stringify({ checked: document.getElementById('pageGlow').checked, label: document.getElementById('pageGlow').closest('label').textContent.trim() })");
+  check('default (nothing stored): the options checkbox is unchecked', JSON.parse(box).checked === false, box);
+  // the options tab took the front: a hidden page translates nothing until it is shown again
+  cdp('activate', 'glow.html');
+}
+toggle('off');
+await sleep(300);
+set({ pageGlow: true });
 
 // ---------------------------------------------------------------- 置換, setting on
 cdp('sw', `(async () => { const tab = (await chrome.tabs.query({})).find((t) => (t.url || '').includes('glow.html'));
@@ -236,7 +266,7 @@ check('back to 置換: glass on what is still in flight', st.units.length === 0 
 toggle('off');
 await sleep(300);
 check('stopped: the glass layer is gone', !(await fxNow()).host);
-set({ pageGlow: true, pageMode: 'replace' });
+cdp('sw', DEFAULTS);
 // the held loads would wait forever: drop the engine document
 if (HELD) console.log('engine:', cdp('sw', "self.__plamo.closeEngine().then(() => 'closed')"));
 

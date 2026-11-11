@@ -35,7 +35,7 @@ async function init() {
   $('#concurrency').value = settings.concurrency;
   fillIdle();
   $('#useTitleContext').checked = !!settings.useTitleContext;
-  $('#pageGlow').checked = settings.pageGlow !== false;
+  $('#pageGlow').checked = settings.pageGlow === true;
   $('#glossary').value = settings.glossary;
   setSeg('#form', settings.form);
   setSeg('#pageMode', settings.pageMode);

@@ -8,7 +8,8 @@ export const DEFAULTS = Object.freeze({
   altTargetLang: 'en',      // used when the source is already in targetLang
   form: '',                 // '' (model decides) | 'plain' (だ・である) | 'polite' (です・ます); Japanese only
   pageMode: 'replace',      // 'replace' | 'bilingual'
-  pageGlow: true,           // 置換: frosted glass and a passing light over the paragraphs being translated
+  pageGlow: false,          // 置換: frosted glass and a passing light over the paragraphs being translated; off by
+                            // default, as page translation took 13 % longer with it
   concurrency: 8,           // parallel requests (the engine has 8 slots)
   useTitleContext: true,    // pass the page title as translation context
   glossary: '',             // one "source = target" per line

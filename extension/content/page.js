@@ -872,7 +872,7 @@
     const base = S.target === 'ja(easy)' ? 'ja' : S.target;
     if (pageLang && pageLang === base) S.target = S.altTarget;
     S.context = cfg.useTitleContext ? document.title.trim().slice(0, 160) : '';
-    glow.setEnabled(cfg.pageGlow !== false);
+    glow.setEnabled(cfg.pageGlow === true);
     S.active = true;
     S.paused = null;
     S.done = S.failed = 0;
@@ -1335,7 +1335,7 @@
 
   // the setting can change while a page is being translated
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.pageGlow) glow.setEnabled(changes.pageGlow.newValue !== false);
+    if (area === 'local' && changes.pageGlow) glow.setEnabled(changes.pageGlow.newValue === true);
   });
 
   // ---------------------------------------------------------------- floating status pill
