@@ -13,8 +13,12 @@ from PIL import Image, ImageDraw, ImageFont
 AI = (0x16, 0x5E, 0x83)  # 藍色, the accent of the UI (ui/base.css --accent)
 GLYPH = '訳'
 # size: (margin around the tile, glyph height as a share of the tile)
-SPEC = {16: (0, 0.74), 32: (1, 0.64), 48: (2, 0.6), 128: (5, 0.58)}
-OUT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'extension', 'icons'))
+# 128: a 96 px tile in 16 px of transparent margin, as the Chrome Web Store asks for its icon
+SPEC = {16: (0, 0.74), 32: (1, 0.64), 48: (2, 0.6), 128: (16, 0.58)}
+ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+OUT = os.path.join(ROOT, 'extension', 'icons')
+# the store's small promo tile: the mark alone on a 藍 field (the store asks for little or no text)
+PROMO = os.path.join(ROOT, 'store', 'images', 'promo-440x280.png')
 
 
 def default_font():
@@ -58,6 +62,14 @@ def icon(size, font_path):
     return im
 
 
+def promo(w, h, font_path):
+    im = Image.new('RGB', (w, h), AI)
+    f = load_font(font_path, round(h * 0.5))
+    x0, y0, x1, y1 = f.getbbox(GLYPH)
+    ImageDraw.Draw(im).text(((w - (x1 - x0)) / 2 - x0, (h - (y1 - y0)) / 2 - y0), GLYPH, font=f, fill=(255, 255, 255))
+    return im
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--font', default=None)
@@ -67,6 +79,9 @@ def main():
         p = os.path.join(OUT, f'icon{size}.png')
         icon(size, font).save(p, optimize=True)
         print('wrote', os.path.relpath(p))
+    os.makedirs(os.path.dirname(PROMO), exist_ok=True)
+    promo(440, 280, font).save(PROMO, optimize=True)
+    print('wrote', os.path.relpath(PROMO))
 
 
 if __name__ == '__main__':
