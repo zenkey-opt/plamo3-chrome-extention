@@ -2,3 +2,5 @@
 .work/
 # extension signing key (only needed to pack a .crx)
 .keys/
+# Chrome Web Store packages (tools/pack-store.py)
+dist/

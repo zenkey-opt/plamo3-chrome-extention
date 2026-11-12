@@ -78,8 +78,12 @@ tools/
   wllama-patches/        wllama と llama.cpp（ggml-webgpu）へのパッチ（下の「仕組みメモ」）
   vendor-wllama.mjs      ビルドを extension/vendor/wllama に取り込む（MV3 向けの書き換え込み）
   gen-notices.mjs        wasm に入っているソフトウェアのライセンス表示（THIRD-PARTY-NOTICES.txt）を生成
-  make-icons.py          アイコン（藍の地に白の「訳」、Noto Sans JP）を生成。Pillow が必要
+  make-icons.py          アイコン（藍の地に白の「訳」、Noto Sans JP）とストアのプロモーション タイルを生成。Pillow が必要
+  pack-store.py          Chrome ウェブストアに上げる ZIP を dist/ に作る。manifest の key は外す
+  store-shots.mjs        ストアのスクリーンショットを撮る
+store/                   Chrome ウェブストアへの申請の手順、入力する文、画像
 tests/                   隔離したテスト用ブラウザを CDP で動かす検証スクリプトとテストページ
+PRIVACY.md               プライバシーポリシー
 ```
 
 ## 速度（実測、RTX 2080 SUPER）
