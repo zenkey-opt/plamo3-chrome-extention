@@ -71,7 +71,7 @@ Hugging Face の 3 つのホストは、利用者が設定画面でダウンロ�
 
 ## Are you using remote code?
 
-「No, I am not using Remote code」を選びます。理由を書く欄があれば、次を貼ります。
+「No, I am not using Remote code」を選びます。2026 年 11 月 12 日の画面には、この質問がありませんでした。質問と理由を書く欄があれば、次を貼ります。
 
 ```text
 All JavaScript and WebAssembly is in the package, including the inference engine (vendor/wllama, built from wllama and llama.cpp with the build scripts and patches in the public repository). The only files downloaded at run time are the model weights (GGUF), which are data. The extension builds the prompt itself (lib/pfml.js) and does not run the chat template stored in the model file.
@@ -90,15 +90,12 @@ JavaScript と WebAssembly は、すべてパッケージに入っています�
 
 ## Test instructions
 
-入力は任意です。審査担当者が拡張機能を試すときの手順で、早く試せる 0.8B のモデルを使います。
+入力は任意です。審査担当者が拡張機能を試すときの手順で、早く試せる 0.8B のモデルを使います。追加の手順の欄は 500 文字までです。ユーザー名とパスワードの欄は空けておきます。
 
 ```text
-No account or payment is needed. The UI is in Japanese.
-Requirements: a GPU with WebGPU (chrome://gpu shows "WebGPU: Hardware accelerated") and about 1 GB of free disk space. Without WebGPU the engine falls back to the CPU and is very slow.
-
-1. The options page opens on install. Under 翻訳モデル (translation model), click ダウンロード (Download) on the "0.8B · Q4_K_M" row (573 MB, the quicker one to test), then 同意してダウンロード (Agree and download) under the licence summary. When the download finishes, select the 0.8B row.
-2. Open an English web page, select a sentence and press Alt+T, or right-click and choose "PLaMo で翻訳". A card shows the Japanese translation.
-3. Press Alt+P to translate the whole page. Press it again to restore the original.
-4. Click the toolbar icon and type English text into the box. The translation appears below it.
-If the shortcuts are not assigned, set them in chrome://extensions/shortcuts or use the right-click menu.
+No account needed. The UI is in Japanese. Needs a GPU with WebGPU (chrome://gpu: "WebGPU: Hardware accelerated"); without it the CPU fallback is very slow.
+1. The options page opens on install. Click ダウンロード on the 0.8B row (573 MB), then 同意してダウンロード. When done, select the 0.8B row.
+2. On an English page, select a sentence and press Alt+T, or right-click > "PLaMo で翻訳".
+3. Alt+P translates the page; press it again to restore.
+4. Click the toolbar icon and type English text.
 ```

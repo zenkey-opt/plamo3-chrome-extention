@@ -2,6 +2,18 @@
 
 Chrome ウェブストアに申請するときに入力する文と画像を、このフォルダに置いています。手順は 2026 年 11 月 12 日時点の Chrome ウェブストアのドキュメントに沿っています。ダッシュボードの画面の名前は英語の表記で書いています。
 
+日本語の画面では次の名前で出ます。
+
+| 英語の画面 | 日本語の画面 |
+| --- | --- |
+| Account | 設定 |
+| Add new item | 新しいアイテム |
+| Store listing | ストアの掲載情報 |
+| Privacy | プライバシー |
+| Distribution | 販売地域 |
+| Test instructions | テスト手順 |
+| Submit for review | 審査のため送信 |
+
 | ファイル | 使う場所 |
 | --- | --- |
 | `listing.md` | Store listing タブと Distribution タブ |
@@ -42,7 +54,7 @@ Chrome ウェブストアに申請するときに入力する文と画像を、�
 
 ## 5. 公開したあと
 
-- ストア版の拡張 ID は開発用の `bhkpaambekhpdikhkccbfdappiogpgnc` とは別になります。両方を同じブラウザに入れられますが、モデルの保存先も別になるので、ストア版ではモデルをもう一度ダウンロードします。
+- ストア版の拡張 ID は `ionjmeejepfbdkielkacbchaeabagokm` で、開発用の `bhkpaambekhpdikhkccbfdappiogpgnc` とは別です。両方を同じブラウザに入れられますが、モデルの保存先も別になるので、ストア版ではモデルをもう一度ダウンロードします。
 - 更新するときは、manifest の `version` を上げてから ZIP を作り直し、Package タブでアップロードして、審査に出します。
 - README にストアのページへのリンクを足します。
 
